@@ -4,13 +4,21 @@
 
 ## 1. Environments
 
-| Env | Hosting | Database | Payments | Purpose |
-|---|---|---|---|---|
-| Local | `next dev` | Supabase CLI local stack (requires **Docker Desktop** on Windows) | Provider **test** keys | Development, pgTAP, Playwright |
-| Preview | Vercel preview deployments per branch/PR | Separate Supabase **staging** project (never production) | Test keys | Review, E2E against preview |
-| Production | Vercel production | Supabase production project (Pro, PITR) | Live keys per tenant | Customers |
+| Env | Git branch | Hosting | Database | Payments | Purpose |
+|---|---|---|---|---|---|
+| Local | any | `next dev` | Hosted Supabase **dev** project (decided 2026-10-26; no local Docker) | Provider **test** keys | Development, pgTAP, Playwright |
+| Staging | `staging` | Vercel (staging / preview deployment) | Supabase **dev/staging** project (never production) | Test keys | Development testing and product-owner review |
+| Production | `main` | Vercel production | Supabase production project (Pro, PITR) | Live keys per tenant | Customers |
 
-Production and staging are separate Supabase projects. Preview deployments must never receive production secrets (Vercel env scoping).
+Production and staging use separate Supabase projects. Staging and preview deployments must never receive production secrets (Vercel environment scoping).
+
+### Branching (product owner decision, 2026-10-26)
+- `main` = **production**. Only updated by merging `staging` after the product owner approves.
+- `staging` = **development testing**. Feature branches (e.g. `phase-1/foundation`) merge into `staging` through a pull request.
+- No direct commits to `main` or `staging`.
+
+### Vercel
+The **product owner connects the GitHub repo to Vercel personally** and configures the production branch (`main`), the staging deployment (`staging`) and environment variables. Claude does not create or change Vercel projects, domains or settings.
 
 ## 2. Environment variable inventory (no real values)
 
@@ -48,9 +56,9 @@ GitHub Actions on every PR (once a GitHub remote is created [D-18]):
 2. Spin up local Supabase → apply migrations → **pgTAP RLS/isolation tests** → integration tests.
 3. Playwright E2E (smoke on PRs, full nightly) against the local stack.
 4. Secret scan (gitleaks) and `npm audit --omit=dev` (high severity fails the build).
-5. Vercel preview deploy (Vercel's Git integration).
+5. Vercel deploys through its Git integration (set up by the product owner): `staging` → staging, `main` → production.
 
-**Production DB migrations:** applied with `supabase db push` from CI on merge to `main`, after manual approval (GitHub environment protection). Destructive migrations (drop/rename/narrowing type) need explicit product-owner approval and a backup checkpoint.
+**Production DB migrations:** applied to the staging database on merge to `staging`, and to production with `supabase db push` on merge to `main`, after manual approval (GitHub environment protection). Destructive migrations (drop/rename/narrowing type) need explicit product-owner approval and a backup checkpoint.
 
 ## 5. Monitoring and alerting
 | Signal | Tool | Alert |
