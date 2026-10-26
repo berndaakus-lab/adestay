@@ -65,7 +65,7 @@ None. This phase is documentation only. No application code, migrations or depen
 - [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
 - [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
 - [~] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — migrations, seed and tests done and passing locally (2026-10-26); **not yet applied to the hosted dev project** (see blocker)
-- [ ] 4. RLS policies, helper functions and pgTAP tenant-isolation tests
+- [x] 4. RLS policies, helper functions and pgTAP tenant-isolation tests — done and passing locally (2026-10-26); migration `20261026150000` to be applied to hosted dev
 - [ ] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule
 - [ ] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP
 - [ ] 7. Public, staff and platform shells; 404 / 403 / suspended pages
@@ -74,7 +74,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
-- Last migration applied to hosted dev: _none yet_
+- Last migration applied to hosted dev: `20261026130300_create_audit_and_rate_limits.sql` + dev seed (product owner, SQL Editor, 2026-10-26). `postgres` bypasses RLS: confirmed true (2026-10-26).
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 
 ### Test results
@@ -97,6 +97,21 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 3 | `tests/db/bundle.test.ts` (SQL Editor bundle applies to an empty DB) | 1/1 passed |
 | 2026-10-26 | 3 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
 | 2026-10-26 | 3 | `CI=1 npx playwright test` | 6/6 passed |
+
+| 2026-10-26 | 4 | `npm run test:db` (pgTAP 001-005: 23 + 27 + 12 + 3 + 52 assertions, + migrations, seed, bundle) | 8/8 passed (117/117 pgTAP assertions) |
+| 2026-10-26 | 4 | Mutation check: `residents_select` replaced with `using (true)` | Isolation suite failed as expected (tests catch a broken policy) |
+| 2026-10-26 | 4 | `npm test` (unit + db) | 52/52 passed |
+| 2026-10-26 | 4 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
+| 2026-10-26 | 4 | `CI=1 npx playwright test` | 6/6 passed |
+
+### Task 4 notes
+- Helpers (`app`, STABLE SECURITY DEFINER, `search_path = ''`): `is_platform_admin` (requires aal2/MFA), `tenant_is_active`, `is_tenant_member`, `is_hostel_admin`, `has_permission`, `my_resident_id`, `has_break_glass`, `can_view_user_profile`, `resolve_tenant_by_host` (verified domains only; normalises case/port/trailing dot; returns status).
+- Policies implement RBAC_MATRIX §4 for all 11 Phase 1 tables. Memberships, residents, audit logs and platform admins have **no direct write access** for API roles (RPC-only, Phase 2/3).
+- Sensitive resident fields (gender, student ID number, emergency contacts) are protected with **column-level privileges** and read through `public.get_resident_sensitive(id)` (self, or `residents.read_sensitive`). This replaces the `residents_sensitive` view in DATABASE_DESIGN: a security-definer view would bypass RLS.
+- Suspension: staff lose access immediately; students keep read access to their own record (D-16). Revocation is immediate (memberships read per query, not from JWT claims).
+- Isolation suite (005) covers anon, outsider, hostel admins of two tenants, admin of a suspended tenant, front desk and accounts staff, two students, platform admin with and without MFA, active vs expired break-glass, cross-tenant update attempts, and revocation.
+- "Last hostel admin cannot be removed" and "no self-role change" are enforced in the membership RPCs (Phase 2), since API roles cannot write memberships at all.
+- Hosted dev check (product owner, 2026-10-26): `select rolbypassrls from pg_roles where rolname = 'postgres'` → **true**. SECURITY DEFINER helpers on forced-RLS tables work on Supabase without recursion.
 
 ### Task 3 notes
 - Migrations (`supabase/migrations/`): extensions, `app`/`private` schemas and helpers; tenancy (tenants, tenant_domains, tenant_profiles, tenant_settings, platform_admins, platform_access_grants); people and access (user_profiles + auth trigger, permission_sets with the 4 system sets, tenant_memberships, residents); append-only audit_logs with redaction and automatic row-change auditing; `private.rate_limits` + `app.check_rate_limit`.

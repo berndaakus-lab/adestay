@@ -1,6 +1,6 @@
--- Deny-by-default posture of everything created in Phase 1 task 3.
+-- Deny-by-default posture: exactly the API access that the RBAC matrix allows, nothing more.
 begin;
-select plan(18);
+select plan(23);
 
 -- Every table in public has RLS enabled AND forced.
 select is(
@@ -22,14 +22,37 @@ select has_table('public', 'residents', 'residents exists');
 select has_table('public', 'audit_logs', 'audit_logs exists');
 select has_table('private', 'rate_limits', 'private.rate_limits exists');
 
--- No API privileges until task 4 adds policies (Supabase grants them by default).
+-- Anonymous visitors can read exactly one table (published hostel profiles) and write nothing.
 select is(
-  (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  (select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r'
-     and (has_table_privilege('anon', c.oid, 'select,insert,update,delete')
-       or has_table_privilege('authenticated', c.oid, 'select,insert,update,delete'))),
-  0,
-  'anon and authenticated have no privileges on any public table yet'
+     and (has_table_privilege('anon', c.oid, 'select,insert,update,delete,truncate')
+       or has_any_column_privilege('anon', c.oid, 'select,insert,update'))),
+  array['tenant_profiles']::text[],
+  'anon can access only tenant_profiles'
+);
+select ok(not has_table_privilege('anon', 'public.tenant_profiles', 'insert,update,delete'), 'anon cannot write tenant_profiles');
+
+-- Signed-in users can never write directly to workflow and history tables (RPC only).
+select is(
+  (select coalesce(array_agg(t order by t), '{}') from unnest(array['residents', 'tenant_memberships', 'audit_logs', 'platform_admins']) t
+   where has_table_privilege('authenticated', 'public.' || t, 'insert,update,delete,truncate')
+      or has_any_column_privilege('authenticated', 'public.' || t, 'insert,update')),
+  '{}'::text[],
+  'authenticated cannot write residents, memberships, audit logs or platform admins directly'
+);
+
+-- Sensitive resident columns are not readable through normal queries.
+select ok(not has_column_privilege('authenticated', 'public.residents', 'emergency_contact_name', 'select'), 'emergency contact name is column-protected');
+select ok(not has_column_privilege('authenticated', 'public.residents', 'student_id_number', 'select'), 'student ID number is column-protected');
+
+-- Every public table has at least one policy (RLS on with no policy is fine, but every API table here has one).
+select is(
+  (select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r'
+     and not exists (select 1 from pg_policies p where p.schemaname = 'public' and p.tablename = c.relname)),
+  '{}'::text[],
+  'every public table has row level security policies'
 );
 
 select ok(not has_schema_privilege('anon', 'private', 'usage'), 'anon cannot use schema private');
@@ -49,11 +72,11 @@ select ok(not has_table_privilege('service_role', 'public.audit_logs', 'delete')
 
 -- No app/private function is callable by everyone or by anonymous visitors (PUBLIC EXECUTE revoked).
 select is(
-  (select coalesce(array_agg(p.oid::regprocedure::text order by 1), '{}')
+  (select coalesce(array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text), '{}')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('app', 'private') and has_function_privilege('anon', p.oid, 'execute')),
-  '{}'::text[],
-  'no app/private function is executable by anon'
+  array['app.resolve_tenant_by_host(text)', 'app.tenant_is_active(uuid)']::text[],
+  'anon can execute only the host resolver and tenant_is_active'
 );
 
 -- Signed-in users may call only these helpers directly (whitelist grows deliberately in later tasks).
@@ -61,7 +84,9 @@ select is(
   (select coalesce(array_agg(p.proname::text order by p.proname), '{}')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('app', 'private') and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['delegable_permissions', 'permission_catalog', 'valid_permissions']::text[],
+  array['can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
+        'is_hostel_admin', 'is_platform_admin', 'is_tenant_member', 'my_resident_id',
+        'permission_catalog', 'resolve_tenant_by_host', 'tenant_is_active', 'valid_permissions']::text[],
   'authenticated can execute only the whitelisted app helpers'
 );
 

@@ -153,7 +153,7 @@ Notation: **PK**, **FK**, **T** = tenant ownership, **U** = uniqueness, **IX** =
 - Columns: `tenant_id`, `user_id` (→ auth.users), `full_name`, `email citext`, `phone_e164`, `gender` (`female|male|undisclosed`; only if the tenant enforces gendered rooms, [D-14]), `institution`, `programme`, `level`, `student_id_number` (optional), `emergency_contact_name`, `emergency_contact_phone`, `emergency_contact_relationship`, `status` (`applicant|active|former|blocked`), `blocked_reason`.
 - U: `(tenant_id, user_id)`; `unique (tenant_id, id)`.
 - IX: `(tenant_id, status)`, `(tenant_id, lower(full_name))` with trigram later if needed, `(tenant_id, phone_e164)`.
-- RLS: resident selects/updates own row (limited columns through an RPC); staff with `residents.read` select; emergency contact columns are exposed only through the `residents_sensitive` view requiring `residents.read_sensitive`.
+- RLS: resident selects/updates own row (limited columns through an RPC); staff with `residents.read` select; emergency contact, student ID and gender columns are protected by column-level privileges and read only through `public.get_resident_sensitive(id)` (self, or `residents.read_sensitive`). Implemented in Phase 1 task 4.
 - Audit: changes to contact, emergency and status fields.
 
 ### 4.3 Inventory and pricing
