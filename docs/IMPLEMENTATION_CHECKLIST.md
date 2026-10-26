@@ -74,7 +74,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
-- Last migration applied to hosted dev: `20261026130300_create_audit_and_rate_limits.sql` + dev seed (product owner, SQL Editor, 2026-10-26). Verification query result not yet received.
+- Last migration applied to hosted dev: `20261026130300_create_audit_and_rate_limits.sql` + dev seed (product owner, SQL Editor, 2026-10-26). `postgres` bypasses RLS: confirmed true (2026-10-26).
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 
 ### Test results
@@ -111,7 +111,7 @@ None. This phase is documentation only. No application code, migrations or depen
 - Suspension: staff lose access immediately; students keep read access to their own record (D-16). Revocation is immediate (memberships read per query, not from JWT claims).
 - Isolation suite (005) covers anon, outsider, hostel admins of two tenants, admin of a suspended tenant, front desk and accounts staff, two students, platform admin with and without MFA, active vs expired break-glass, cross-tenant update attempts, and revocation.
 - "Last hostel admin cannot be removed" and "no self-role change" are enforced in the membership RPCs (Phase 2), since API roles cannot write memberships at all.
-- **Open from task 3:** the hosted verification query (in particular `postgres_bypasses_rls`) has not been reported back. If Supabase's `postgres` role does not bypass RLS, the forced-RLS helpers would recurse; this must be confirmed before relying on the hosted database.
+- Hosted dev check (product owner, 2026-10-26): `select rolbypassrls from pg_roles where rolname = 'postgres'` → **true**. SECURITY DEFINER helpers on forced-RLS tables work on Supabase without recursion.
 
 ### Task 3 notes
 - Migrations (`supabase/migrations/`): extensions, `app`/`private` schemas and helpers; tenancy (tenants, tenant_domains, tenant_profiles, tenant_settings, platform_admins, platform_access_grants); people and access (user_profiles + auth trigger, permission_sets with the 4 system sets, tenant_memberships, residents); append-only audit_logs with redaction and automatic row-change auditing; `private.rate_limits` + `app.check_rate_limit`.
