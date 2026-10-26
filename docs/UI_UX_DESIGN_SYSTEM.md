@@ -73,13 +73,15 @@ Defined once as CSS variables in Tailwind v4 `@theme`, consumed by shadcn/ui. Pe
 | `--forest-deep` | `#183329` | Hover, footer, admin sidebar |
 | `--olive` | `#68765A` | Large text, icons, chips **only** |
 | `--olive-text` *(new)* | `#56634A` (5.87 : 1 on ivory) | Eyebrows/small labels |
-| `--brass` | `#B69A61` | Hairlines, focus ring, decorative accents |
+| `--brass` | `#B69A61` | Hairlines and decorative accents only (fails 3:1) |
+| `--brass-strong` *(new)* | `#7A5E26` | Focus ring (≥ 3:1 on ivory and white) |
 | `--charcoal` | `#292D2A` | Body text |
 | `--muted` | `#70766F` | Secondary text on white only |
 | `--muted-strong` *(new)* | `#5E645D` (5.57 : 1 on ivory) | Secondary text on ivory |
-| `--line` | `#DEDFD9` | Borders |
+| `--line` | `#DEDFD9` | Borders, dividers |
+| `--line-strong` *(new)* | `#858A83` | Input and control borders (≥ 3:1, WCAG 1.4.11) |
 | `--success` / `--success-bg` | `#3E6B4F` / `#E8F0E9` | Status: approved/paid |
-| `--warning` / `--warning-bg` | `#8A652A` / `#F5EDDA` | Status: pending/due |
+| `--warning` / `--warning-bg` | `#7A5A24` / `#F5EDDA` | Status: pending/due (darkened from `#8A652A` for margin above 4.5:1) |
 | `--danger` / `--danger-bg` *(new)* | `#9B2C2C` / `#F8E7E5` | Errors, overdue, rejected |
 | `--info` / `--info-bg` *(new)* | `#2F5D74` / `#E6EFF3` | Neutral notices |
 | Radius | `2px` controls, `4px` cards | Restrained; avoid pill-heavy UI |

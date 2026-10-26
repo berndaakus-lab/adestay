@@ -1,6 +1,6 @@
 # Database Design (preliminary)
 
-> Status: Phase 0 draft. **No migrations have been generated or applied.** Column lists are design intent; the exact DDL is written and reviewed in the phase that introduces each table.
+> Status: Phase 1 in progress. Tenancy, people/access, audit and rate-limit tables are implemented in `supabase/migrations/` (task 3); not yet applied to the hosted project. Column lists are design intent; the exact DDL is written and reviewed in the phase that introduces each table.
 
 ## 1. Conventions
 
@@ -111,7 +111,7 @@ Notation: **PK**, **FK**, **T** = tenant ownership, **U** = uniqueness, **IX** =
 
 #### `tenant_profiles` (public-facing content)
 - PK/FK `tenant_id`. Columns: `display_name`, `tagline`, `about`, `logo_path`, `hero_image_path`, `primary_color`, `accent_color`, `contact_phone`, `contact_email`, `whatsapp_phone`, `address`, `digital_address` (Ghana Post GPS), `landmark_directions`, `map_url`, `policies_md`, `terms_md`, `is_published bool`.
-- RLS: anon/auth `SELECT` where `is_published` and the tenant is active; `UPDATE` with `settings.branding`.
+- RLS: anon/auth `SELECT` where `is_published` and the tenant is active; `UPDATE` with `settings.manage`.
 - Audit: yes.
 
 #### `tenant_settings` (private operational settings)

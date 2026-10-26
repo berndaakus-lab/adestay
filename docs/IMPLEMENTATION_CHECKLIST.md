@@ -52,7 +52,7 @@ None. This phase is documentation only. No application code, migrations or depen
 | D-19 | Phase 5 split into 5a (invoices + offline payments) and 5b (online gateway). |
 | D-20 | Staff and platform admin on shared `app.<domain>`; student portal on each hostel's domain. |
 | Student sign-in | Email OTP code (SMS can be added later). |
-| Branches | `main` = production, `staging` = development testing; feature branches merge into `staging` by PR. |
+| Branches | `main` = production, `staging` = development testing; development is pushed directly to `staging`; the product owner merges `staging` into `main`. (Task 1 reached `staging` via PR #1.) |
 | Vercel | Product owner connects and configures Vercel personally. |
 | Dev database | **Hosted Supabase dev project** (no local Docker). The product owner creates it and puts keys in `.env.local`; keys are never pasted into chat. |
 
@@ -63,8 +63,8 @@ None. This phase is documentation only. No application code, migrations or depen
 
 ### Tasks
 - [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
-- [ ] 2. Modern Residence design tokens, fonts and base components; component gallery page
-- [ ] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data
+- [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
+- [~] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — migrations, seed and tests done and passing locally (2026-10-26); **not yet applied to the hosted dev project** (see blocker)
 - [ ] 4. RLS policies, helper functions and pgTAP tenant-isolation tests
 - [ ] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule
 - [ ] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP
@@ -72,7 +72,10 @@ None. This phase is documentation only. No application code, migrations or depen
 - [ ] 8. GitHub Actions CI and `.env.example`
 
 ### Blockers / needs from product owner
-- [ ] Hosted Supabase dev project created, with its URL, anon key and service-role key placed in `.env.local` (needed from task 3).
+- [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
+- [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
+- Last migration applied to hosted dev: _none yet_
+- [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 
 ### Test results
 | Date | Task | Command | Result |
@@ -82,6 +85,37 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 1 | `npm test` (Vitest 5.0.5) | 2/2 passed |
 | 2026-10-26 | 1 | `npm run build` (Next 16.4.3) | Succeeded |
 | 2026-10-26 | 1 | `CI=1 npx playwright test` (desktop + mobile Chromium, production server) | 2/2 passed |
+
+| 2026-10-26 | 2 | `npm run typecheck` | Passed |
+| 2026-10-26 | 2 | `npm run lint` | Passed, 0 problems |
+| 2026-10-26 | 2 | `npm test` (contrast, money, status, utils) | 44/44 passed |
+| 2026-10-26 | 2 | `npm run build` | Succeeded (/, /design-system static) |
+| 2026-10-26 | 2 | `CI=1 npx playwright test` (smoke + axe WCAG 2.2 AA, desktop + mobile) | 6/6 passed, after fixing 1 axe failure (scrollable table not keyboard-focusable on mobile) |
+
+| 2026-10-26 | 3 | `npm run test:db` (migrations + seed in PGlite; pgTAP 001-004: 18 + 27 + 12 + 3 assertions) | 6/6 passed (60/60 pgTAP assertions) |
+| 2026-10-26 | 3 | `npm test` (unit + db) | 50/50 passed |
+| 2026-10-26 | 3 | `tests/db/bundle.test.ts` (SQL Editor bundle applies to an empty DB) | 1/1 passed |
+| 2026-10-26 | 3 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
+| 2026-10-26 | 3 | `CI=1 npx playwright test` | 6/6 passed |
+
+### Task 3 notes
+- Migrations (`supabase/migrations/`): extensions, `app`/`private` schemas and helpers; tenancy (tenants, tenant_domains, tenant_profiles, tenant_settings, platform_admins, platform_access_grants); people and access (user_profiles + auth trigger, permission_sets with the 4 system sets, tenant_memberships, residents); append-only audit_logs with redaction and automatic row-change auditing; `private.rate_limits` + `app.check_rate_limit`.
+- Every public table: RLS **enabled and forced**, no policies yet, no anon/authenticated privileges (deny by default until task 4).
+- **Local DB testing without Docker:** PGlite (Postgres 18 in WASM, `@electric-sql/pglite` + official `@electric-sql/pglite-pgtap`, dev-only) plus `supabase/tests/support/supabase_shim.sql` (stand-in for Supabase's auth schema and roles; never applied to a real project). The same pgTAP files run on the hosted project with `supabase test db`.
+- **Security finding fixed during the task:** API roles could execute `app.*` helper functions because Postgres grants EXECUTE to PUBLIC by default and per-schema default privileges cannot remove that. Each migration now ends with `revoke execute on all functions in schema app from public`, and a pgTAP guard test fails if any app/private function becomes executable by anon or by authenticated beyond a whitelist.
+- Doc inconsistency resolved: tenant_profiles updates use the catalog permission `settings.manage` (DATABASE_DESIGN mentioned `settings.branding`, which is not in the catalog).
+- To verify on the hosted project: Supabase's `postgres` role bypasses RLS for the forced tables (needed by SECURITY DEFINER helpers and the seed); the `pgtap` extension is enabled before running `supabase test db`.
+- Supabase targets Postgres 17; PGlite runs 18, so migrations avoid 18-only features.
+
+### Task 2 notes
+- Tokens live in `src/app/globals.css` (hex only); `tests/unit/contrast.test.ts` parses them and checks 24 colour pairs against WCAG AA.
+- Accessibility adjustments vs the Phase 0 token table: `--warning` darkened to `#7a5a24`; inputs use `--line-strong` `#858a83` (3:1 for control borders); focus ring uses `--brass-strong` `#7a5e26` (brass `#b69a61` fails 3:1 and stays decorative).
+- Controls are 44px tall (buttons, inputs, selects); corners 2px controls / 4px cards.
+- Light-only design: `next-themes` removed; the toaster is fixed to light.
+- Fonts: Inter + DM Serif Display, self-hosted by `next/font`.
+- Shared helpers: `formatGhs` (pesewas → "GH₵ 1,250.00"), status label/tone maps for every workflow state.
+- `/design-system` gallery returns 404 when `VERCEL_ENV=production`.
+- Shared table container is keyboard-focusable so wide tables scroll on small screens.
 
 ### Task 1 notes
 - Versions: Next 16.4.3, React 19.3.0, Tailwind v4, shadcn 4.22.1 (radix-nova preset, Lucide icons), Vitest 5.0.5, Playwright 1.64.

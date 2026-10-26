@@ -12,10 +12,9 @@
 
 Production and staging use separate Supabase projects. Staging and preview deployments must never receive production secrets (Vercel environment scoping).
 
-### Branching (product owner decision, 2026-10-26)
-- `main` = **production**. Only updated by merging `staging` after the product owner approves.
-- `staging` = **development testing**. Feature branches (e.g. `phase-1/foundation`) merge into `staging` through a pull request.
-- No direct commits to `main` or `staging`.
+### Branching (product owner decision, updated 2026-10-26)
+- `staging` = **development testing**. Development is committed and pushed directly to `staging`. No feature branches.
+- `main` = **production**. The **product owner** merges `staging` into `main` personally. Claude never commits, pushes or merges to `main`.
 
 ### Vercel
 The **product owner connects the GitHub repo to Vercel personally** and configures the production branch (`main`), the staging deployment (`staging`) and environment variables. Claude does not create or change Vercel projects, domains or settings.
@@ -58,7 +57,9 @@ GitHub Actions on every PR (once a GitHub remote is created [D-18]):
 4. Secret scan (gitleaks) and `npm audit --omit=dev` (high severity fails the build).
 5. Vercel deploys through its Git integration (set up by the product owner): `staging` → staging, `main` → production.
 
-**Production DB migrations:** applied to the staging database on merge to `staging`, and to production with `supabase db push` on merge to `main`, after manual approval (GitHub environment protection). Destructive migrations (drop/rename/narrowing type) need explicit product-owner approval and a backup checkpoint.
+**How migrations reach Supabase (decided 2026-10-26, same as ugs-kitchen-v2):** the app uses only the URL, anon key and service-role key from Vercel. Schema changes are applied by the product owner in the Supabase SQL Editor using the bundle from `npm run db:bundle` (`--since <timestamp>` for new migrations only). The checklist records the last migration applied to each environment. Supabase CLI or GitHub Actions automation can replace this later.
+
+**Production DB migrations:** applied to the staging database when pushed to `staging`, and to production with `supabase db push` on merge to `main`, after manual approval (GitHub environment protection). Destructive migrations (drop/rename/narrowing type) need explicit product-owner approval and a backup checkpoint.
 
 ## 5. Monitoring and alerting
 | Signal | Tool | Alert |
