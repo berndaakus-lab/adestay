@@ -1,5 +1,7 @@
 # AdeStay (hostel platform): instructions for Claude Code
 
+- **Before every task**, re-read `docs/IMPLEMENTATION_CHECKLIST.md` and the docs that task touches (`SYSTEM_ARCHITECTURE.md`, `DATABASE_DESIGN.md`, `RBAC_MATRIX.md`, `SECURITY_THREAT_MODEL.md`, `BOOKING_AND_PAYMENT_FLOWS.md`, `UI_UX_DESIGN_SYSTEM.md`, relevant ADRs). Do not work from memory of them; do not deviate from them without the product owner's approval.
+- Follow the task order in the checklist as written (product owner instruction, 2026-10-26).
 - Read `docs/IMPLEMENTATION_CHECKLIST.md` first. It records the current phase, approval status and test results. Resume from it; do not repeat completed work.
 - Work only on the phase marked approved there. Never start the next phase without explicit approval from the product owner in chat.
 - Follow the mandatory rules in `docs/IMPLEMENTATION_PLAN.md` and the designs in `docs/` (architecture, database, RBAC, security, flows, UI system, ADRs in `docs/adr/`).

@@ -63,7 +63,7 @@ None. This phase is documentation only. No application code, migrations or depen
 
 ### Tasks
 - [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
-- [ ] 2. Modern Residence design tokens, fonts and base components; component gallery page
+- [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
 - [ ] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data
 - [ ] 4. RLS policies, helper functions and pgTAP tenant-isolation tests
 - [ ] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule
@@ -82,6 +82,22 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 1 | `npm test` (Vitest 5.0.5) | 2/2 passed |
 | 2026-10-26 | 1 | `npm run build` (Next 16.4.3) | Succeeded |
 | 2026-10-26 | 1 | `CI=1 npx playwright test` (desktop + mobile Chromium, production server) | 2/2 passed |
+
+| 2026-10-26 | 2 | `npm run typecheck` | Passed |
+| 2026-10-26 | 2 | `npm run lint` | Passed, 0 problems |
+| 2026-10-26 | 2 | `npm test` (contrast, money, status, utils) | 44/44 passed |
+| 2026-10-26 | 2 | `npm run build` | Succeeded (/, /design-system static) |
+| 2026-10-26 | 2 | `CI=1 npx playwright test` (smoke + axe WCAG 2.2 AA, desktop + mobile) | 6/6 passed, after fixing 1 axe failure (scrollable table not keyboard-focusable on mobile) |
+
+### Task 2 notes
+- Tokens live in `src/app/globals.css` (hex only); `tests/unit/contrast.test.ts` parses them and checks 24 colour pairs against WCAG AA.
+- Accessibility adjustments vs the Phase 0 token table: `--warning` darkened to `#7a5a24`; inputs use `--line-strong` `#858a83` (3:1 for control borders); focus ring uses `--brass-strong` `#7a5e26` (brass `#b69a61` fails 3:1 and stays decorative).
+- Controls are 44px tall (buttons, inputs, selects); corners 2px controls / 4px cards.
+- Light-only design: `next-themes` removed; the toaster is fixed to light.
+- Fonts: Inter + DM Serif Display, self-hosted by `next/font`.
+- Shared helpers: `formatGhs` (pesewas → "GH₵ 1,250.00"), status label/tone maps for every workflow state.
+- `/design-system` gallery returns 404 when `VERCEL_ENV=production`.
+- Shared table container is keyboard-focusable so wide tables scroll on small screens.
 
 ### Task 1 notes
 - Versions: Next 16.4.3, React 19.3.0, Tailwind v4, shadcn 4.22.1 (radix-nova preset, Lucide icons), Vitest 5.0.5, Playwright 1.64.
