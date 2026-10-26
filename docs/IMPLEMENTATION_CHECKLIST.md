@@ -64,7 +64,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Tasks
 - [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
 - [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
-- [ ] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data
+- [~] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — migrations, seed and tests done and passing locally (2026-10-26); **not yet applied to the hosted dev project** (see blocker)
 - [ ] 4. RLS policies, helper functions and pgTAP tenant-isolation tests
 - [ ] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule
 - [ ] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP
@@ -72,7 +72,9 @@ None. This phase is documentation only. No application code, migrations or depen
 - [ ] 8. GitHub Actions CI and `.env.example`
 
 ### Blockers / needs from product owner
-- [ ] Hosted Supabase dev project created, with its URL, anon key and service-role key placed in `.env.local` (needed from task 3).
+- [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
+- [ ] **Apply migrations to the hosted dev project.** No database credentials exist on the dev machine (no `.env.local`). The product owner links the project in their own terminal (`npx supabase login`, `npx supabase link --project-ref <ref>`, then `npx supabase db push --include-seed`), so the database password never passes through chat.
+- [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 
 ### Test results
 | Date | Task | Command | Result |
@@ -88,6 +90,20 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 2 | `npm test` (contrast, money, status, utils) | 44/44 passed |
 | 2026-10-26 | 2 | `npm run build` | Succeeded (/, /design-system static) |
 | 2026-10-26 | 2 | `CI=1 npx playwright test` (smoke + axe WCAG 2.2 AA, desktop + mobile) | 6/6 passed, after fixing 1 axe failure (scrollable table not keyboard-focusable on mobile) |
+
+| 2026-10-26 | 3 | `npm run test:db` (migrations + seed in PGlite; pgTAP 001-004: 18 + 27 + 12 + 3 assertions) | 6/6 passed (60/60 pgTAP assertions) |
+| 2026-10-26 | 3 | `npm test` (unit + db) | 50/50 passed |
+| 2026-10-26 | 3 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
+| 2026-10-26 | 3 | `CI=1 npx playwright test` | 6/6 passed |
+
+### Task 3 notes
+- Migrations (`supabase/migrations/`): extensions, `app`/`private` schemas and helpers; tenancy (tenants, tenant_domains, tenant_profiles, tenant_settings, platform_admins, platform_access_grants); people and access (user_profiles + auth trigger, permission_sets with the 4 system sets, tenant_memberships, residents); append-only audit_logs with redaction and automatic row-change auditing; `private.rate_limits` + `app.check_rate_limit`.
+- Every public table: RLS **enabled and forced**, no policies yet, no anon/authenticated privileges (deny by default until task 4).
+- **Local DB testing without Docker:** PGlite (Postgres 18 in WASM, `@electric-sql/pglite` + official `@electric-sql/pglite-pgtap`, dev-only) plus `supabase/tests/support/supabase_shim.sql` (stand-in for Supabase's auth schema and roles; never applied to a real project). The same pgTAP files run on the hosted project with `supabase test db`.
+- **Security finding fixed during the task:** API roles could execute `app.*` helper functions because Postgres grants EXECUTE to PUBLIC by default and per-schema default privileges cannot remove that. Each migration now ends with `revoke execute on all functions in schema app from public`, and a pgTAP guard test fails if any app/private function becomes executable by anon or by authenticated beyond a whitelist.
+- Doc inconsistency resolved: tenant_profiles updates use the catalog permission `settings.manage` (DATABASE_DESIGN mentioned `settings.branding`, which is not in the catalog).
+- To verify on the hosted project: Supabase's `postgres` role bypasses RLS for the forced tables (needed by SECURITY DEFINER helpers and the seed); the `pgtap` extension is enabled before running `supabase test db`.
+- Supabase targets Postgres 17; PGlite runs 18, so migrations avoid 18-only features.
 
 ### Task 2 notes
 - Tokens live in `src/app/globals.css` (hex only); `tests/unit/contrast.test.ts` parses them and checks 24 colour pairs against WCAG AA.
