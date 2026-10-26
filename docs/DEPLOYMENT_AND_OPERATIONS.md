@@ -57,6 +57,8 @@ GitHub Actions on every PR (once a GitHub remote is created [D-18]):
 4. Secret scan (gitleaks) and `npm audit --omit=dev` (high severity fails the build).
 5. Vercel deploys through its Git integration (set up by the product owner): `staging` → staging, `main` → production.
 
+**How migrations reach Supabase (decided 2026-10-26, same as ugs-kitchen-v2):** the app uses only the URL, anon key and service-role key from Vercel. Schema changes are applied by the product owner in the Supabase SQL Editor using the bundle from `npm run db:bundle` (`--since <timestamp>` for new migrations only). The checklist records the last migration applied to each environment. Supabase CLI or GitHub Actions automation can replace this later.
+
 **Production DB migrations:** applied to the staging database when pushed to `staging`, and to production with `supabase db push` on merge to `main`, after manual approval (GitHub environment protection). Destructive migrations (drop/rename/narrowing type) need explicit product-owner approval and a backup checkpoint.
 
 ## 5. Monitoring and alerting

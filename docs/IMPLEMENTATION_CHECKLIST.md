@@ -73,7 +73,8 @@ None. This phase is documentation only. No application code, migrations or depen
 
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
-- [ ] **Apply migrations to the hosted dev project.** No database credentials exist on the dev machine (no `.env.local`). The product owner links the project in their own terminal (`npx supabase login`, `npx supabase link --project-ref <ref>`, then `npx supabase db push --include-seed`), so the database password never passes through chat.
+- [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
+- Last migration applied to hosted dev: _none yet_
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 
 ### Test results
@@ -93,6 +94,7 @@ None. This phase is documentation only. No application code, migrations or depen
 
 | 2026-10-26 | 3 | `npm run test:db` (migrations + seed in PGlite; pgTAP 001-004: 18 + 27 + 12 + 3 assertions) | 6/6 passed (60/60 pgTAP assertions) |
 | 2026-10-26 | 3 | `npm test` (unit + db) | 50/50 passed |
+| 2026-10-26 | 3 | `tests/db/bundle.test.ts` (SQL Editor bundle applies to an empty DB) | 1/1 passed |
 | 2026-10-26 | 3 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
 | 2026-10-26 | 3 | `CI=1 npx playwright test` | 6/6 passed |
 
