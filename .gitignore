@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+.vercel/
+supabase/.temp/
+.DS_Store
+
+# Client proposals and other commercial documents (kept out of the code history)
+proposals/
