@@ -52,6 +52,8 @@ None. This phase is documentation only. No application code, migrations or depen
 | D-19 | Phase 5 split into 5a (invoices + offline payments) and 5b (online gateway). |
 | D-20 | Staff and platform admin on shared `app.<domain>`; student portal on each hostel's domain. |
 | Student sign-in | Email OTP code (SMS can be added later). |
+| Branches | `main` = production, `staging` = development testing; feature branches merge into `staging` by PR. |
+| Vercel | Product owner connects and configures Vercel personally. |
 | Dev database | **Hosted Supabase dev project** (no local Docker). The product owner creates it and puts keys in `.env.local`; keys are never pasted into chat. |
 
 ### Also produced in Phase 0
@@ -60,7 +62,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ## Phase 1: Foundation & Security (started 2026-10-26)
 
 ### Tasks
-- [~] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright
+- [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
 - [ ] 2. Modern Residence design tokens, fonts and base components; component gallery page
 - [ ] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data
 - [ ] 4. RLS policies, helper functions and pgTAP tenant-isolation tests
@@ -73,4 +75,16 @@ None. This phase is documentation only. No application code, migrations or depen
 - [ ] Hosted Supabase dev project created, with its URL, anon key and service-role key placed in `.env.local` (needed from task 3).
 
 ### Test results
-_None yet._
+| Date | Task | Command | Result |
+|---|---|---|---|
+| 2026-10-26 | 1 | `npm run typecheck` (next typegen + tsc) | Passed |
+| 2026-10-26 | 1 | `npm run lint` | Passed, 0 problems |
+| 2026-10-26 | 1 | `npm test` (Vitest 5.0.5) | 2/2 passed |
+| 2026-10-26 | 1 | `npm run build` (Next 16.4.3) | Succeeded |
+| 2026-10-26 | 1 | `CI=1 npx playwright test` (desktop + mobile Chromium, production server) | 2/2 passed |
+
+### Task 1 notes
+- Versions: Next 16.4.3, React 19.3.0, Tailwind v4, shadcn 4.22.1 (radix-nova preset, Lucide icons), Vitest 5.0.5, Playwright 1.64.
+- shadcn's preset uses the `cn` package (published by shadcn, repo `shadcn-ui/cn`) instead of `clsx` + `tailwind-merge`.
+- `npm run typecheck` runs `next typegen` first because Next 16 generates global route types (`LayoutProps`).
+- Next 16 ships its own docs in `node_modules/next/dist/docs/`; `AGENTS.md` (managed by `next dev`) says to read them before writing app code.
