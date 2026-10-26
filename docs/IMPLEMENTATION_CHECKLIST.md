@@ -66,7 +66,7 @@ None. This phase is documentation only. No application code, migrations or depen
 - [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
 - [~] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — migrations, seed and tests done and passing locally (2026-10-26); **not yet applied to the hosted dev project** (see blocker)
 - [x] 4. RLS policies, helper functions and pgTAP tenant-isolation tests — done and passing locally (2026-10-26); applied to hosted dev 2026-10-26
-- [ ] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule
+- [x] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule — done (2026-10-26); migration `20261026160000` to be applied to hosted dev
 - [ ] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP
 - [ ] 7. Public, staff and platform shells; 404 / 403 / suspended pages
 - [ ] 8. GitHub Actions CI and `.env.example`
@@ -103,6 +103,24 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 4 | `npm test` (unit + db) | 52/52 passed |
 | 2026-10-26 | 4 | `npm run typecheck`, `npm run lint`, `npm run build` | Passed / 0 problems / succeeded |
 | 2026-10-26 | 4 | `CI=1 npx playwright test` | 6/6 passed |
+
+| 2026-10-26 | 5 | `npm test` (unit 76 + db 9 files; pgTAP adds 006 with 12 assertions → 129 total) | 85/85 passed |
+| 2026-10-26 | 5 | ESLint probe: file outside allow-list importing the service-role client and reading the key | 3 errors reported (rule works); probe deleted |
+| 2026-10-26 | 5 | `npm run lint`, `npm run typecheck`, `npm run build` (proxy compiled) | 0 problems / passed / succeeded |
+| 2026-10-26 | 5 | Live production server: app host 200; tenant host without Supabase env 503; spoofed `x-adestay-tenant-id` on app host ignored (200) | As expected |
+| 2026-10-26 | 5 | `CI=1 npx playwright test` | 6/6 passed |
+
+### Task 5 notes
+- Next.js 16 renamed `middleware.ts` to **`proxy.ts`** (`src/proxy.ts`, Node.js runtime). Docs that say "middleware" mean this file.
+- Database part (DB → API → UI): migration `20261026160000_add_server_access_rpcs.sql` exposes `public.resolve_tenant_by_host`, `public.my_memberships` (effective permissions; admins get the full catalog) and `public.am_i_platform_admin` (aal2 only), because only the `public` schema is on the Data API. pgTAP 006 covers them.
+- Proxy (`src/lib/server/tenant/proxy-handler.ts`): strips inbound `x-adestay-*` / `x-tenant-*` headers; app host (and localhost) → app surface; other hosts must resolve to a verified, non-onboarding tenant (else 404); forwards tenant id/slug/status as internal request headers only. 503 for tenant hosts when Supabase env is missing.
+- `getTenantContext()` re-resolves the Host itself and ignores the proxy's hint headers (ADR-0005 rule 2.4); request-scoped via React `cache`.
+- `requireTenantMember(slug)`, `requirePermission(access, perm, "read" | "action")` (404 for reads, 403 for actions), `requirePlatformAdmin()` in `src/lib/server/authz.ts`; memberships read per request (revocation immediate).
+- Tenant resolver cache: 60 s for hits, 15 s for misses, max 1,000 hosts, per server instance.
+- Service role: client in `src/lib/server/supabase/admin.ts` (`server-only`). `SERVICE_ROLE_ALLOWLIST` in `eslint.config.mjs` (webhooks, cron, booking lookup, provisioning) enforced by ESLint and by `tests/unit/service-role-allowlist.test.ts`.
+- `src/lib/permissions.ts` mirrors the SQL permission catalog; a test fails if they drift.
+- New env (optional until D-1): `NEXT_PUBLIC_APP_HOST` (defaults to `localhost`). Session refresh in the proxy comes with auth (task 6).
+- Not testable on this machine without Supabase keys: tenant resolution against the hosted database. Can be checked on the Vercel staging deployment by adding its hostname as a verified tenant domain.
 
 ### Task 4 notes
 - Helpers (`app`, STABLE SECURITY DEFINER, `search_path = ''`): `is_platform_admin` (requires aal2/MFA), `tenant_is_active`, `is_tenant_member`, `is_hostel_admin`, `has_permission`, `my_resident_id`, `has_break_glass`, `can_view_user_profile`, `resolve_tenant_by_host` (verified domains only; normalises case/port/trailing dot; returns status).
