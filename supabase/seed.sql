@@ -1,4 +1,4 @@
--- Development seed data only. Never run against production.
+---- Development seed data only. Never run against production.
 -- Two demo hostels so tenant isolation can be exercised from day one.
 -- Demo users (admins, staff, students) are created through Supabase Auth in Phase 1 task 6.
 
