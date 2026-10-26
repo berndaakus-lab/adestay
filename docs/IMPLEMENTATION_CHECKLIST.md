@@ -52,7 +52,7 @@ None. This phase is documentation only. No application code, migrations or depen
 | D-19 | Phase 5 split into 5a (invoices + offline payments) and 5b (online gateway). |
 | D-20 | Staff and platform admin on shared `app.<domain>`; student portal on each hostel's domain. |
 | Student sign-in | Email OTP code (SMS can be added later). |
-| Branches | `main` = production, `staging` = development testing; feature branches merge into `staging` by PR. |
+| Branches | `main` = production, `staging` = development testing; development is pushed directly to `staging`; the product owner merges `staging` into `main`. (Task 1 reached `staging` via PR #1.) |
 | Vercel | Product owner connects and configures Vercel personally. |
 | Dev database | **Hosted Supabase dev project** (no local Docker). The product owner creates it and puts keys in `.env.local`; keys are never pasted into chat. |
 
