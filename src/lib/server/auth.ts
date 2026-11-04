@@ -80,8 +80,8 @@ export async function requireStaffSession(nextPath: string): Promise<SessionUser
 }
 
 /** Student portal pages on a tenant host: signed in (email code). */
-export async function requireStudentSession(nextPath: string): Promise<SessionUser> {
+export async function requireStudentSession(nextPath: string, signInPath = "/portal/sign-in"): Promise<SessionUser> {
   const user = await getSessionUser();
-  if (!user) redirect(`/portal/sign-in?next=${encodeURIComponent(nextPath)}`);
+  if (!user) redirect(`${signInPath}?next=${encodeURIComponent(nextPath)}`);
   return user;
 }

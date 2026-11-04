@@ -75,8 +75,8 @@ select is(
   (select coalesce(array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text), '{}')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('app', 'private') and has_function_privilege('anon', p.oid, 'execute')),
-  array['app.resolve_tenant_by_host(text)', 'app.tenant_is_active(uuid)']::text[],
-  'anon can execute only the host resolver and tenant_is_active'
+  array['app.resolve_tenant_by_host(text)', 'app.resolve_tenant_by_slug(text)', 'app.tenant_is_active(uuid)']::text[],
+  'anon can execute only the host and slug resolvers and tenant_is_active'
 );
 
 -- Signed-in users may call only these helpers directly (whitelist grows deliberately in later tasks).
@@ -86,7 +86,7 @@ select is(
    where n.nspname in ('app', 'private') and has_function_privilege('authenticated', p.oid, 'execute')),
   array['can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
         'is_hostel_admin', 'is_platform_admin', 'is_tenant_member', 'my_resident_id',
-        'permission_catalog', 'resolve_tenant_by_host', 'tenant_is_active', 'valid_permissions']::text[],
+        'permission_catalog', 'resolve_tenant_by_host', 'resolve_tenant_by_slug', 'tenant_is_active', 'valid_permissions']::text[],
   'authenticated can execute only the whitelisted app helpers'
 );
 

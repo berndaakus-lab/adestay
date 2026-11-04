@@ -5,6 +5,7 @@ import { safeNextPath } from "@/lib/safe-redirect";
 import { getRequestOrigin, getSessionUser } from "@/lib/server/auth";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
 import { getTenantContext } from "@/lib/server/tenant/context";
+import { getSiteTenant } from "@/lib/server/tenant/site";
 import {
   emailOnlySchema,
   fieldErrors,
@@ -81,11 +82,10 @@ export async function updatePassword(_prev: FormState, formData: FormData): Prom
   redirect("/account/continue?next=%2Faccount");
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(formData?: FormData): Promise<void> {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
-  const ctx = await getTenantContext();
-  redirect(ctx.surface === "tenant" ? "/portal/sign-in" : "/sign-in");
+  redirect(safeNextPath(String(formData?.get("redirectTo") ?? ""), "/sign-in"));
 }
 
 // ---------------------------------------------------------------------------
@@ -127,8 +127,13 @@ export async function verifyTotp(_prev: FormState, formData: FormData): Promise<
 // ---------------------------------------------------------------------------
 // Students (tenant host): 6-digit email code
 // ---------------------------------------------------------------------------
+/** Student actions run on a hostel site: its own domain, or a staging preview of it. */
+async function onHostelSite(formData: FormData): Promise<boolean> {
+  return (await getSiteTenant(String(formData.get("site") ?? ""))) !== null;
+}
+
 export async function requestStudentCode(_prev: FormState, formData: FormData): Promise<FormState> {
-  if (!(await requireSurface("tenant"))) return unavailable;
+  if (!(await onHostelSite(formData))) return unavailable;
   const parsed = emailOnlySchema.safeParse(entries(formData));
   if (!parsed.success) return { status: "error", step: "email", fieldErrors: fieldErrors(parsed.error) };
 
@@ -147,7 +152,7 @@ export async function requestStudentCode(_prev: FormState, formData: FormData): 
 }
 
 export async function verifyStudentCode(_prev: FormState, formData: FormData): Promise<FormState> {
-  if (!(await requireSurface("tenant"))) return unavailable;
+  if (!(await onHostelSite(formData))) return unavailable;
   const parsed = otpCodeSchema.safeParse(entries(formData));
   if (!parsed.success) {
     return { status: "error", step: "code", email: String(formData.get("email") ?? ""), fieldErrors: fieldErrors(parsed.error) };

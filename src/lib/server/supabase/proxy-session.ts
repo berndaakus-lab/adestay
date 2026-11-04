@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest, NextResponse } from "next/server";
 import { getPublicSupabaseEnv } from "@/lib/server/env";
+import { buildContinueResponse } from "@/lib/server/tenant/proxy-handler";
 
 /** True when the request carries a Supabase auth cookie (sb-<project>-auth-token...). */
 export function hasSupabaseSession(request: NextRequest): boolean {
@@ -12,8 +13,8 @@ export function hasSupabaseSession(request: NextRequest): boolean {
  * if it is close to expiry, writing rotated cookies to both the request (for this render) and
  * the response (for the browser). @supabase/ssr pattern adapted to keep our internal headers.
  */
-export async function nextWithSessionRefresh(request: NextRequest, headers: Headers): Promise<NextResponse> {
-  let response = NextResponse.next({ request: { headers } });
+export async function nextWithSessionRefresh(request: NextRequest, headers: Headers, rewriteTo?: URL): Promise<NextResponse> {
+  let response = buildContinueResponse(headers, rewriteTo);
   if (!hasSupabaseSession(request)) return response;
 
   const { url, anonKey } = getPublicSupabaseEnv();
@@ -26,7 +27,7 @@ export async function nextWithSessionRefresh(request: NextRequest, headers: Head
         for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
         const cookieHeader = request.headers.get("cookie");
         if (cookieHeader) headers.set("cookie", cookieHeader);
-        response = NextResponse.next({ request: { headers } });
+        response = buildContinueResponse(headers, rewriteTo);
         for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
       },
     },

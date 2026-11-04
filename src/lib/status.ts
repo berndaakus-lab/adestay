@@ -72,3 +72,12 @@ export const paymentStatus = {
   abandoned: { label: "Not completed", tone: "neutral" },
   reversed: { label: "Reversed", tone: "danger" },
 } as const satisfies Record<PaymentStatus, StatusStyle>;
+
+export type TenantStatus = "onboarding" | "active" | "suspended" | "archived";
+
+export const tenantStatus = {
+  onboarding: { label: "Onboarding", tone: "info" },
+  active: { label: "Active", tone: "success" },
+  suspended: { label: "Suspended", tone: "danger" },
+  archived: { label: "Archived", tone: "neutral" },
+} as const satisfies Record<TenantStatus, StatusStyle>;

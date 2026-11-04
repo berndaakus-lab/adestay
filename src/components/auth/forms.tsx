@@ -156,7 +156,7 @@ export function MfaSetup({ next }: { next: string }) {
   );
 }
 
-export function StudentSignInForm({ next }: { next: string }) {
+export function StudentSignInForm({ next, site }: { next: string; site: string }) {
   const [requestState, requestAction, requesting] = useActionState(requestStudentCode, initial);
   const [verifyState, verifyAction, verifying] = useActionState(verifyStudentCode, initial);
   const [editingEmail, setEditingEmail] = useState(false);
@@ -168,6 +168,7 @@ export function StudentSignInForm({ next }: { next: string }) {
     return (
       <form action={(fd) => { setEditingEmail(false); requestAction(fd); }} className="flex flex-col gap-5" noValidate>
         <FormMessage state={requestState} />
+        <input type="hidden" name="site" value={site} />
         <TextField id="email" label="Email address" type="email" autoComplete="email" inputMode="email" defaultValue={email} description="We will email you a 6-digit code. No password needed." error={requestState.fieldErrors?.email} />
         <Button type="submit" disabled={requesting} className="w-full">
           {requesting ? "Sending code…" : "Email me a code"}
@@ -181,6 +182,7 @@ export function StudentSignInForm({ next }: { next: string }) {
       <FormMessage state={verifyState.status === "idle" ? requestState : verifyState} />
       <input type="hidden" name="email" value={email} />
       <input type="hidden" name="next" value={next} />
+      <input type="hidden" name="site" value={site} />
       <TextField id="code" label="6-digit code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus error={verifyState.fieldErrors?.code} />
       <Button type="submit" disabled={verifying} className="w-full">
         {verifying ? "Checking…" : "Sign in"}

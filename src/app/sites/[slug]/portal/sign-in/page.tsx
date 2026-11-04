@@ -6,30 +6,36 @@ import { StudentSignInForm } from "@/components/auth/forms";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { firstParam } from "@/lib/search-params";
 import { getSessionUser } from "@/lib/server/auth";
-import { getTenantContext } from "@/lib/server/tenant/context";
 import { getTenantDisplayName } from "@/lib/server/tenant/profile";
+import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
 
 export const metadata: Metadata = { title: "Student sign in" };
 
-async function StudentSignIn({ searchParams }: { searchParams: PageProps<"/portal/sign-in">["searchParams"] }) {
-  const ctx = await getTenantContext();
-  if (ctx.surface !== "tenant") notFound();
-  const next = safeNextPath(firstParam((await searchParams).next), "/portal");
+async function StudentSignIn({
+  params,
+  searchParams,
+}: {
+  params: PageProps<"/sites/[slug]/portal/sign-in">["params"];
+  searchParams: PageProps<"/sites/[slug]/portal/sign-in">["searchParams"];
+}) {
+  const site = await getSiteTenant((await params).slug);
+  if (!site) notFound();
+  const next = safeNextPath(firstParam((await searchParams).next), sitePath(site, "/portal"));
   if (await getSessionUser()) redirect(next);
-  const name = await getTenantDisplayName(ctx.tenant);
+  const name = await getTenantDisplayName(site.tenant);
   return (
     <>
       <p className="mb-5 text-sm text-muted-foreground">Track your booking, payments and room at {name}.</p>
-      <StudentSignInForm next={next} />
+      <StudentSignInForm next={next} site={site.tenant.slug} />
     </>
   );
 }
 
-export default function StudentSignInPage({ searchParams }: PageProps<"/portal/sign-in">) {
+export default function StudentSignInPage({ params, searchParams }: PageProps<"/sites/[slug]/portal/sign-in">) {
   return (
-    <AuthCard eyebrow="Student portal" title="Sign in">
+    <AuthCard eyebrow="Student portal" title="Sign in" inSite>
       <Suspense fallback={<FormSkeleton />}>
-        <StudentSignIn searchParams={searchParams} />
+        <StudentSignIn params={params} searchParams={searchParams} />
       </Suspense>
     </AuthCard>
   );

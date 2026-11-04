@@ -53,3 +53,14 @@ export const supabaseHostLookup: HostLookup = async (host) => {
 };
 
 export const resolveTenantByHost = createTenantResolver(supabaseHostLookup);
+
+/** Slug -> tenant through public.resolve_tenant_by_slug (anonymous; public facts only). */
+export async function resolveTenantBySlug(slug: string): Promise<ResolvedTenant | null> {
+  if (!/^[a-z0-9-]{3,40}$/.test(slug)) return null;
+  const { getPublicSupabaseClient } = await import("@/lib/server/supabase/public");
+  const { data, error } = await getPublicSupabaseClient()
+    .rpc("resolve_tenant_by_slug", { p_slug: slug })
+    .maybeSingle<{ tenant_id: string; slug: string; status: TenantStatus }>();
+  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
+  return data ? { id: data.tenant_id, slug: data.slug, status: data.status } : null;
+}

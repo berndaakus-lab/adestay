@@ -1,7 +1,7 @@
 -- Phase 1, task 3. Foundations shared by every later migration.
 -- Design: docs/DATABASE_DESIGN.md §1 (conventions) and §3 (helper functions), docs/RBAC_MATRIX.md §2.
 
--- Extensions live in Supabase's `extensions` schema; references are schema-qualified.
+-- Extensions live in Supabase's `extensions` schema; references are schema-qualified.....
 create extension if not exists citext with schema extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists btree_gist with schema extensions;
