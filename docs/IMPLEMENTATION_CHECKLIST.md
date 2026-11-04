@@ -74,7 +74,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
-- Last migration applied to hosted dev: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
+- Last migration applied to hosted dev: `20261026160000_add_server_access_rpcs.sql` (inferred 2026-11-04: `/account` loaded memberships on staging); `20261104100000` not yet confirmed. Before that: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 - [ ] **Task 6 hosted setup (product owner, Supabase dashboard)** — see DEPLOYMENT_AND_OPERATIONS §3a: URL configuration (Site URL + `/auth/callback` redirect URLs), minimum password length 12, TOTP MFA enabled, Magic Link email template shows `{{ .Token }}`, OTP expiry 600 s. Then apply migrations `20261026160000` and `20261104100000`, create demo accounts and run `supabase/dev/link-demo-users.sql`.
 - [ ] **D-9 email provider** needed before students outside the Supabase team can receive codes: Supabase's built-in email only delivers to project team members and is heavily rate-limited.
@@ -116,6 +116,7 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-11-04 | 6 | `CI=1 npx playwright test` (smoke, axe on /, /design-system, /sign-in, /forgot-password; auth routing; open-redirect) | 18/18 passed |
 | 2026-11-04 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` (sign-in pages as partial prerender) | 0 problems / passed / succeeded |
 | 2026-11-04 | 6 | Visual check: /sign-in with validation errors (desktop), /forgot-password (390 px mobile) | Matches design system |
+| 2026-11-04 | 6 | **Hosted (Vercel staging + Supabase dev), product owner:** staff password sign-in → /account; account with no memberships, MFA not required ("Not used"), "Your hostels" empty via `my_memberships` | Passed — confirms Supabase connection, Vercel app-host fix and that migration `20261026160000` is applied |
 
 ### Task 6 notes
 - Database part: migration `20261104100000_protect_last_hostel_admin.sql` — trigger blocks revoking, demoting or deleting the last active hostel admin of a non-archived tenant (Phase 1 acceptance criterion 4); pgTAP 007 (8 assertions).

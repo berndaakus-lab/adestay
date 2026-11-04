@@ -1,6 +1,6 @@
 -- Phase 1, task 3. Tenancy: hostels, domains, public profile, private settings, platform admins.
 -- Design: docs/DATABASE_DESIGN.md §4.1, docs/adr/0001-tenant-isolation.md, docs/adr/0005-domain-resolution.md.
--- RLS is enabled and forced here with no policies (deny by default). Policies and API grants: task 4.
+-- RLS is enabled and forced here with no policies (deny by default). Policies and API grants: task 4....
 
 create table public.tenants (
   id uuid primary key default gen_random_uuid(),
