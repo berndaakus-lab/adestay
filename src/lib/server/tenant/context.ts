@@ -2,7 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { classifyHost, normalizeHost } from "@/lib/hosts";
-import { getAppHost } from "@/lib/server/env";
+import { getAppHosts } from "@/lib/server/env";
 import { resolveTenantByHost, type ResolvedTenant } from "./resolve";
 
 export type TenantContext =
@@ -18,7 +18,7 @@ export type TenantContext =
 export const getTenantContext = cache(async (): Promise<TenantContext> => {
   const host = normalizeHost((await headers()).get("host"));
   if (!host) return { surface: "unknown", host: null };
-  if (classifyHost(host, { appHost: getAppHost() }) === "app") return { surface: "app", host };
+  if (classifyHost(host, { appHosts: getAppHosts() }) === "app") return { surface: "app", host };
 
   const tenant = await resolveTenantByHost(host);
   if (!tenant || tenant.status === "onboarding") return { surface: "unknown", host };

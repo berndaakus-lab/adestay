@@ -48,6 +48,23 @@ A `.env.example` with these names and empty values will be committed in Phase 1.
 - **Custom domains:** the hostel adds `book.theirhostel.com.gh`. The platform admin adds it via the Vercel Domains API. The UI shows the CNAME/TXT records to set; a cron polls verification; status is mirrored in `tenant_domains`. SSL is automatic through Vercel.
 - **Email sending domain:** use the platform domain (`bookings@<brand>.com`) with the hostel name as display name and reply-to set to the hostel's address. Per-tenant sending domains are out of scope for v1.
 
+## 3a. Supabase Auth settings (dashboard, per environment)
+Set by the product owner in Supabase Dashboard → Authentication. Values for the dev/staging project:
+
+| Setting | Where | Value |
+|---|---|---|
+| Site URL | URL Configuration | The staging site, e.g. `https://<staging>.vercel.app` |
+| Redirect URLs | URL Configuration | `https://<staging>.vercel.app/auth/callback` and `http://localhost:3000/auth/callback` |
+| Email provider | Sign In / Providers → Email | Enabled; Confirm email on |
+| Minimum password length | Sign In / Providers → Email (password settings) | 12 |
+| Email OTP expiry | Sign In / Providers → Email | 600 seconds |
+| TOTP MFA | Multi-Factor | Enabled |
+| Magic Link email template | Emails → Templates → Magic Link | Must show the code: include `{{ .Token }}` (students type the 6-digit code) |
+| SMTP | Emails → SMTP | Custom provider required before real students sign in (D-9). Built-in email only reaches project team members. |
+| Leaked-password protection | Passwords | On, when the plan supports it |
+
+Vercel: no extra variables are needed for the staging host (the app reads Vercel's runtime hostnames). Set `NEXT_PUBLIC_APP_HOST` once the root domain exists (e.g. `app.<domain>`).
+
 ## 4. CI/CD
 
 GitHub Actions on every PR (once a GitHub remote is created [D-18]):

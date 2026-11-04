@@ -15,8 +15,8 @@ export function normalizeHost(rawHost: string | null | undefined): string | null
 }
 
 export interface HostConfig {
-  /** Staff and platform admin host, e.g. "app.adestay.com". */
-  appHost: string;
+  /** Hosts serving the staff/platform surface, e.g. ["app.adestay.com", "adestay-git-staging.vercel.app"]. */
+  appHosts: readonly string[];
 }
 
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -26,7 +26,7 @@ const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
  * "tenant": any other host; it must resolve to a verified tenant domain.
  */
 export function classifyHost(host: string, config: HostConfig): "app" | "tenant" {
-  if (host === normalizeHost(config.appHost) || LOCAL_APP_HOSTS.has(host)) return "app";
+  if (LOCAL_APP_HOSTS.has(host) || config.appHosts.some((h) => normalizeHost(h) === host)) return "app";
   return "tenant";
 }
 
@@ -36,3 +36,20 @@ export const HEADER_SURFACE = "x-adestay-surface";
 export const HEADER_TENANT_ID = "x-adestay-tenant-id";
 export const HEADER_TENANT_SLUG = "x-adestay-tenant-slug";
 export const HEADER_TENANT_STATUS = "x-adestay-tenant-status";
+
+/**
+ * Which paths exist on which surface. Enforced in the proxy so wrong-surface requests get a real
+ * 404 status (pages stream with partial prerendering, so a later notFound() cannot change it).
+ * Pages still check their surface themselves as defence in depth.
+ */
+const TENANT_ONLY_PREFIXES = ["/portal"];
+const APP_ONLY_PREFIXES = ["/sign-in", "/forgot-password", "/reset-password", "/mfa", "/account", "/auth", "/t", "/platform"];
+
+function matchesPrefix(path: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
+export function isPathOnSurface(pathname: string, surface: "app" | "tenant"): boolean {
+  if (surface === "app") return !matchesPrefix(pathname, TENANT_ONLY_PREFIXES);
+  return !matchesPrefix(pathname, APP_ONLY_PREFIXES);
+}

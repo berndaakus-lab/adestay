@@ -6,14 +6,17 @@ import {
   HEADER_TENANT_SLUG,
   HEADER_TENANT_STATUS,
   INTERNAL_HEADER_PREFIX,
+  isPathOnSurface,
   normalizeHost,
 } from "@/lib/hosts";
 import type { ResolvedTenant } from "./resolve";
 
 export interface ProxyDeps {
-  appHost: string;
+  appHosts: readonly string[];
   resolveTenant: (host: string) => Promise<ResolvedTenant | null>;
   supabaseConfigured: boolean;
+  /** Continues the request; the real proxy also refreshes the auth session here. */
+  next?: (request: NextRequest, headers: Headers) => Promise<NextResponse>;
 }
 
 /**
@@ -24,6 +27,7 @@ export interface ProxyDeps {
  * The headers are a routing hint only: server code re-resolves before using them.
  */
 export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps): Promise<NextResponse> {
+  const next = deps.next ?? (async (_req: NextRequest, h: Headers) => NextResponse.next({ request: { headers: h } }));
   const headers = new Headers(request.headers);
   for (const name of [...headers.keys()]) {
     if (name.startsWith(INTERNAL_HEADER_PREFIX) || name.startsWith("x-tenant-")) headers.delete(name);
@@ -32,9 +36,12 @@ export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps):
   const host = normalizeHost(request.headers.get("host"));
   if (!host) return new NextResponse("Bad request", { status: 400 });
 
-  if (classifyHost(host, { appHost: deps.appHost }) === "app") {
+  const notFound = () => new NextResponse("Not found", { status: 404, headers: { "cache-control": "no-store" } });
+
+  if (classifyHost(host, { appHosts: deps.appHosts }) === "app") {
+    if (!isPathOnSurface(request.nextUrl.pathname, "app")) return notFound();
     headers.set(HEADER_SURFACE, "app");
-    return NextResponse.next({ request: { headers } });
+    return next(request, headers);
   }
 
   if (!deps.supabaseConfigured) {
@@ -43,13 +50,12 @@ export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps):
 
   const tenant = await deps.resolveTenant(host);
   // Onboarding tenants are not public yet; archived ones never resolve.
-  if (!tenant || tenant.status === "onboarding") {
-    return new NextResponse("Not found", { status: 404, headers: { "cache-control": "no-store" } });
-  }
+  if (!tenant || tenant.status === "onboarding") return notFound();
+  if (!isPathOnSurface(request.nextUrl.pathname, "tenant")) return notFound();
 
   headers.set(HEADER_SURFACE, "tenant");
   headers.set(HEADER_TENANT_ID, tenant.id);
   headers.set(HEADER_TENANT_SLUG, tenant.slug);
   headers.set(HEADER_TENANT_STATUS, tenant.status);
-  return NextResponse.next({ request: { headers } });
+  return next(request, headers);
 }

@@ -64,10 +64,10 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Tasks
 - [x] 1. Scaffold Next.js (App Router, TS strict), Tailwind v4, shadcn/ui, ESLint, Vitest, Playwright (2026-10-26)
 - [x] 2. Modern Residence design tokens, fonts and base components; component gallery page (2026-10-26)
-- [~] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — migrations, seed and tests done and passing locally (2026-10-26); **not yet applied to the hosted dev project** (see blocker)
+- [x] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — done (2026-10-26); applied to hosted dev by the product owner via SQL Editor (2026-10-26)
 - [x] 4. RLS policies, helper functions and pgTAP tenant-isolation tests — done and passing locally (2026-10-26); applied to hosted dev 2026-10-26
 - [x] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule — done (2026-10-26); migration `20261026160000` to be applied to hosted dev
-- [ ] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP
+- [~] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP — code, tests and screens done (2026-11-04); **hosted verification pending**: Supabase Auth dashboard settings, migrations `20261026160000` + `20261104100000`, demo accounts, then a real sign-in / MFA / email-code run on Vercel staging
 - [ ] 7. Public, staff and platform shells; 404 / 403 / suspended pages
 - [ ] 8. GitHub Actions CI and `.env.example`
 
@@ -76,6 +76,8 @@ None. This phase is documentation only. No application code, migrations or depen
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
 - Last migration applied to hosted dev: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
+- [ ] **Task 6 hosted setup (product owner, Supabase dashboard)** — see DEPLOYMENT_AND_OPERATIONS §3a: URL configuration (Site URL + `/auth/callback` redirect URLs), minimum password length 12, TOTP MFA enabled, Magic Link email template shows `{{ .Token }}`, OTP expiry 600 s. Then apply migrations `20261026160000` and `20261104100000`, create demo accounts and run `supabase/dev/link-demo-users.sql`.
+- [ ] **D-9 email provider** needed before students outside the Supabase team can receive codes: Supabase's built-in email only delivers to project team members and is heavily rate-limited.
 
 ### Test results
 | Date | Task | Command | Result |
@@ -109,6 +111,24 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-10-26 | 5 | `npm run lint`, `npm run typecheck`, `npm run build` (proxy compiled) | 0 problems / passed / succeeded |
 | 2026-10-26 | 5 | Live production server: app host 200; tenant host without Supabase env 503; spoofed `x-adestay-tenant-id` on app host ignored (200) | As expected |
 | 2026-10-26 | 5 | `CI=1 npx playwright test` | 6/6 passed |
+
+| 2026-11-04 | 6 | `npm test` (unit 113 + db 11 files incl. pgTAP 007 last-admin guard and demo-user script) | 124/124 passed |
+| 2026-11-04 | 6 | `CI=1 npx playwright test` (smoke, axe on /, /design-system, /sign-in, /forgot-password; auth routing; open-redirect) | 18/18 passed |
+| 2026-11-04 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` (sign-in pages as partial prerender) | 0 problems / passed / succeeded |
+| 2026-11-04 | 6 | Visual check: /sign-in with validation errors (desktop), /forgot-password (390 px mobile) | Matches design system |
+
+### Task 6 notes
+- Database part: migration `20261104100000_protect_last_hostel_admin.sql` — trigger blocks revoking, demoting or deleting the last active hostel admin of a non-archived tenant (Phase 1 acceptance criterion 4); pgTAP 007 (8 assertions).
+- Staff (app host): `/sign-in` (email + password, same error for unknown email or wrong password), `/forgot-password` (same answer whether or not the account exists), `/auth/callback` (PKCE `code` or `token_hash`), `/reset-password` (12-character minimum), `/mfa/setup` (TOTP QR + key), `/mfa/verify`, `/account` (temporary landing until task 7), `/account/continue` (applies MFA policy after sign-in).
+- MFA policy (`src/lib/mfa-policy.ts`): hostel admins and platform-admin accounts must enrol and verify TOTP (aal2); other staff optional, but anyone with a verified factor must use it.
+- Students (tenant host): `/portal/sign-in` (6-digit email code via `signInWithOtp` + `verifyOtp`, account created on first code), `/portal` placeholder (Phase 4).
+- Proxy refreshes the Supabase session cookies (only when an auth cookie is present) and now also enforces which paths exist on which surface, so wrong-surface pages return a real 404 (with partial prerendering a later `notFound()` cannot change the status).
+- **Bug fixed from task 5:** on Vercel the deployment hostname (`*.vercel.app`) was treated as an unknown tenant host, so every page returned 404 on staging. App hosts now include `NEXT_PUBLIC_APP_HOST` and Vercel's runtime `VERCEL_URL`, `VERCEL_BRANCH_URL` and `VERCEL_PROJECT_PRODUCTION_URL`.
+- Next.js 16 `cacheComponents`: every cookie/header read sits inside `<Suspense>`; auth pages build as partial prerender.
+- Open redirects: every `next` parameter passes `safeNextPath` (same-site paths only).
+- OTP send rate limit (5/hour/email in SECURITY_THREAT_MODEL §5) currently relies on Supabase Auth's built-in limits; an app-level limit comes with the booking flow (Phase 3).
+- Lighthouse is not installed; accessibility criterion 8 is covered by axe (WCAG 2.2 AA) scans of the sign-in and reset pages on desktop and mobile.
+- `supabase/config.toml` (local CLI only) aligned: password minimum 12, TOTP on, OTP expiry 600 s, `/auth/callback` redirect.
 
 ### Task 5 notes
 - Next.js 16 renamed `middleware.ts` to **`proxy.ts`** (`src/proxy.ts`, Node.js runtime). Docs that say "middleware" mean this file.

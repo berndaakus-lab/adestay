@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { classifyHost, normalizeHost } from "@/lib/hosts";
+import { classifyHost, isPathOnSurface, normalizeHost } from "@/lib/hosts";
 import { handleProxyRequest, type ProxyDeps } from "@/lib/server/tenant/proxy-handler";
 import { createTenantResolver, type ResolvedTenant } from "@/lib/server/tenant/resolve";
 
@@ -15,16 +15,16 @@ const directory: Record<string, ResolvedTenant> = {
 
 function deps(overrides: Partial<ProxyDeps> = {}): ProxyDeps {
   return {
-    appHost: "app.adestay.test",
+    appHosts: ["app.adestay.test", "adestay-git-staging-berndaakus.vercel.app"],
     supabaseConfigured: true,
     resolveTenant: async (host) => directory[host] ?? null,
     ...overrides,
   };
 }
 
-function request(host: string, extraHeaders: Record<string, string> = {}) {
-  // The URL is fixed; the Host header is what the proxy reads (as on Vercel).
-  return new NextRequest("http://placeholder.invalid/rooms", { headers: { host, ...extraHeaders } });
+function request(host: string, extraHeaders: Record<string, string> = {}, path = "/rooms") {
+  // The URL host is a placeholder; the Host header is what the proxy reads (as on Vercel).
+  return new NextRequest(`http://placeholder.invalid${path}`, { headers: { host, ...extraHeaders } });
 }
 
 /** Internal request headers forwarded by NextResponse.next({ request: { headers } }). */
@@ -50,16 +50,23 @@ describe("normalizeHost", () => {
 
 describe("classifyHost", () => {
   it("treats the configured app host and localhost as the app surface", () => {
-    expect(classifyHost("app.adestay.test", { appHost: "APP.adestay.test:443" })).toBe("app");
-    expect(classifyHost("localhost", { appHost: "app.adestay.test" })).toBe("app");
+    expect(classifyHost("app.adestay.test", { appHosts: ["APP.adestay.test:443"] })).toBe("app");
+    expect(classifyHost("localhost", { appHosts: [] })).toBe("app");
+    expect(classifyHost("adestay-git-staging.vercel.app", { appHosts: ["adestay-git-staging.vercel.app"] })).toBe("app");
   });
 
   it("treats every other host as a tenant host", () => {
-    expect(classifyHost("alder-house.localhost", { appHost: "app.adestay.test" })).toBe("tenant");
+    expect(classifyHost("alder-house.localhost", { appHosts: ["app.adestay.test"] })).toBe("tenant");
   });
 });
 
 describe("proxy", () => {
+  it("routes the Vercel deployment hostname to the app surface", async () => {
+    const res = await handleProxyRequest(request("adestay-git-staging-berndaakus.vercel.app"), deps());
+    expect(res.status).toBe(200);
+    expect(forwarded(res, "x-adestay-surface")).toBe("app");
+  });
+
   it("routes the app host to the app surface", async () => {
     const res = await handleProxyRequest(request("app.adestay.test"), deps());
     expect(forwarded(res, "x-adestay-surface")).toBe("app");
@@ -114,6 +121,34 @@ describe("proxy", () => {
   it("rejects a missing or malformed Host header", async () => {
     const res = await handleProxyRequest(request("bad host"), deps());
     expect(res.status).toBe(400);
+  });
+});
+
+describe("surface paths", () => {
+  it.each([
+    ["/portal", "app", false],
+    ["/portal/sign-in", "app", false],
+    ["/portalx", "app", true],
+    ["/sign-in", "app", true],
+    ["/sign-in", "tenant", false],
+    ["/account/continue", "tenant", false],
+    ["/mfa/setup", "tenant", false],
+    ["/t/alder-house", "tenant", false],
+    ["/portal/sign-in", "tenant", true],
+    ["/rooms", "tenant", true],
+    ["/", "tenant", true],
+  ] as const)("%s on %s -> %s", (path, surface, allowed) => {
+    expect(isPathOnSurface(path, surface)).toBe(allowed);
+  });
+
+  it("returns 404 for the student portal on the app host", async () => {
+    const res = await handleProxyRequest(request("app.adestay.test", {}, "/portal/sign-in"), deps());
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for staff sign-in on a hostel host", async () => {
+    const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/sign-in"), deps());
+    expect(res.status).toBe(404);
   });
 });
 

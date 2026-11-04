@@ -35,7 +35,16 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
-/** Staff/platform host. Until the root domain is chosen (D-1), plain localhost is the app host. */
-export function getAppHost(): string {
-  return process.env.NEXT_PUBLIC_APP_HOST || "localhost";
+/**
+ * Hosts that serve the staff/platform surface: NEXT_PUBLIC_APP_HOST (once the root domain is
+ * chosen, D-1) plus the deployment's own Vercel hostnames, which Vercel exposes at runtime
+ * (System Environment Variables). localhost is always an app host (see classifyHost).
+ */
+export function getAppHosts(): string[] {
+  return [
+    process.env.NEXT_PUBLIC_APP_HOST,
+    process.env.VERCEL_URL,
+    process.env.VERCEL_BRANCH_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+  ].filter((h): h is string => Boolean(h));
 }

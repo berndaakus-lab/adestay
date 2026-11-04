@@ -1,14 +1,17 @@
 import type { NextRequest } from "next/server";
-import { getAppHost, isSupabaseConfigured } from "@/lib/server/env";
+import { getAppHosts, isSupabaseConfigured } from "@/lib/server/env";
+import { nextWithSessionRefresh } from "@/lib/server/supabase/proxy-session";
 import { handleProxyRequest } from "@/lib/server/tenant/proxy-handler";
 import { resolveTenantByHost } from "@/lib/server/tenant/resolve";
 
 // Next.js 16 "proxy" (formerly middleware). Runs on the Node.js runtime before every page.
 export async function proxy(request: NextRequest) {
   return handleProxyRequest(request, {
-    appHost: getAppHost(),
+    appHosts: getAppHosts(),
     resolveTenant: resolveTenantByHost,
     supabaseConfigured: isSupabaseConfigured(),
+    // Refresh the Supabase session cookies when Supabase is configured.
+    next: isSupabaseConfigured() ? nextWithSessionRefresh : undefined,
   });
 }
 
