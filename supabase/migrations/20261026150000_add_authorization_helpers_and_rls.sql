@@ -5,9 +5,9 @@
 -- Helpers are STABLE SECURITY DEFINER with search_path = '' and fully qualified names.
 -- They read membership tables as the function owner, so policies never recurse into themselves.
 
--- ---------------------------------------------------------------------------
+-- -----------------------------------------------------------------------------------------
 -- Helper functions
--- ---------------------------------------------------------------------------
+-- ------------------------------------------------------------------------------------------
 
 -- Platform admin AND signed in with MFA (aal2). Without MFA a platform admin has no platform powers.
 create function app.is_platform_admin()
