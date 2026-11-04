@@ -8,8 +8,9 @@ import { getPublicSupabaseEnv } from "@/lib/server/env";
  * security with the user's JWT. This is the default client for Server Components and Actions.
  */
 export async function createSupabaseServerClient() {
-  const { url, anonKey } = getPublicSupabaseEnv();
+  // Read cookies first: it marks the caller as request-time, so it is never run at build time.
   const cookieStore = await cookies();
+  const { url, anonKey } = getPublicSupabaseEnv();
 
   return createServerClient(url, anonKey, {
     cookies: {

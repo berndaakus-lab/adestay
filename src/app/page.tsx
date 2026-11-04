@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
+import { Button } from "@/components/ui/button";
 
-// Temporary platform landing page until the public and staff shells arrive (Phase 1, task 7).
+// Platform landing page on the app host. Hostel websites live on their own domains.
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-8 px-4 py-24 md:px-10">
@@ -12,6 +14,11 @@ export default function Home() {
           Branded booking websites, bed allocation, Mobile Money payments and a student portal, built for hostels in
           Ghana.
         </p>
+      </div>
+      <div>
+        <Button asChild size="lg">
+          <Link href="/sign-in">Staff sign in</Link>
+        </Button>
       </div>
     </main>
   );

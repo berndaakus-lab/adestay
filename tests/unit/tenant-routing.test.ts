@@ -17,6 +17,7 @@ function deps(overrides: Partial<ProxyDeps> = {}): ProxyDeps {
   return {
     appHosts: ["app.adestay.test", "adestay-git-staging-berndaakus.vercel.app"],
     supabaseConfigured: true,
+    tenantPreview: false,
     resolveTenant: async (host) => directory[host] ?? null,
     ...overrides,
   };
@@ -80,10 +81,6 @@ describe("proxy", () => {
     expect(forwarded(res, "x-adestay-tenant-status")).toBe("active");
   });
 
-  it("returns 404 for unknown hosts", async () => {
-    const res = await handleProxyRequest(request("evil.example.com"), deps());
-    expect(res.status).toBe(404);
-  });
 
   it("strips spoofed tenant headers on the app host", async () => {
     const res = await handleProxyRequest(
@@ -149,6 +146,44 @@ describe("surface paths", () => {
   it("returns 404 for staff sign-in on a hostel host", async () => {
     const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/sign-in"), deps());
     expect(res.status).toBe(404);
+  });
+});
+
+describe("hostel site rewrites", () => {
+  /** Where NextResponse.rewrite() sends the request internally. */
+  const rewrittenTo = (res: Response) => {
+    const target = res.headers.get("x-middleware-rewrite");
+    return target ? new URL(target).pathname + new URL(target).search : null;
+  };
+
+  it("rewrites a hostel domain to its internal /sites/{slug} route, keeping the query", async () => {
+    const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/portal/sign-in?next=%2Fportal"), deps());
+    expect(rewrittenTo(res)).toBe("/sites/alder-house/portal/sign-in?next=%2Fportal");
+    expect(forwarded(res, "x-adestay-tenant-id")).toBe(ALDER.id);
+  });
+
+  it("rewrites the hostel home page to /sites/{slug}", async () => {
+    const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/"), deps());
+    expect(rewrittenTo(res)).toBe("/sites/alder-house");
+  });
+
+  it("refuses /sites paths typed on a hostel domain (no nested or cross-hostel routes)", async () => {
+    const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/sites/closed-hostel"), deps());
+    expect(res.status).toBe(404);
+  });
+
+  it("serves unknown hosts the hostel-not-found page with a 404 status", async () => {
+    const res = await handleProxyRequest(request("evil.example.com", {}, "/"), deps());
+    expect(res.status).toBe(404);
+    expect(rewrittenTo(res)).toBe("/hostel-not-found");
+  });
+
+  it("allows /sites previews on the app host only when preview is enabled", async () => {
+    const blocked = await handleProxyRequest(request("app.adestay.test", {}, "/sites/alder-house"), deps({ tenantPreview: false }));
+    expect(blocked.status).toBe(404);
+    const allowed = await handleProxyRequest(request("app.adestay.test", {}, "/sites/alder-house"), deps({ tenantPreview: true }));
+    expect(allowed.status).toBe(200);
+    expect(forwarded(allowed, "x-adestay-surface")).toBe("app");
   });
 });
 

@@ -40,6 +40,15 @@ export function isSupabaseConfigured(): boolean {
  * chosen, D-1) plus the deployment's own Vercel hostnames, which Vercel exposes at runtime
  * (System Environment Variables). localhost is always an app host (see classifyHost).
  */
+/**
+ * Hostel-site previews at /sites/{slug} on the app host, so staging can show public sites and
+ * student sign-in before a domain exists. Off in production (VERCEL_ENV=production) and when
+ * ADESTAY_TENANT_PREVIEW=off. Product-owner approval pending (Phase 1 task 7 notes).
+ */
+export function isTenantPreviewEnabled(): boolean {
+  return process.env.VERCEL_ENV !== "production" && process.env.ADESTAY_TENANT_PREVIEW !== "off";
+}
+
 export function getAppHosts(): string[] {
   return [
     process.env.NEXT_PUBLIC_APP_HOST,

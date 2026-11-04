@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AuthCard, FormSkeleton } from "@/components/auth/auth-card";
 import { Badge } from "@/components/ui/badge";
@@ -9,54 +10,53 @@ import { requireStaffSession } from "@/lib/server/auth";
 import { getMyMemberships, isPlatformAdmin } from "@/lib/server/authz";
 import { getTenantContext } from "@/lib/server/tenant/context";
 
-export const metadata: Metadata = { title: "Your account" };
+export const metadata: Metadata = { title: "Choose a workspace" };
 
-// Temporary signed-in landing page; the staff workspace shell replaces it in task 7.
+// Landing after staff sign-in: one hostel goes straight to its workspace; otherwise choose.
 async function Account() {
   if ((await getTenantContext()).surface !== "app") notFound();
   const user = await requireStaffSession("/account");
   const [memberships, platformAdmin] = await Promise.all([getMyMemberships(), isPlatformAdmin()]);
+  if (memberships.length === 1 && !platformAdmin) redirect(`/t/${memberships[0].slug}`);
 
   return (
     <div className="flex flex-col gap-6">
-      <dl className="grid gap-3 text-sm">
-        <div>
-          <dt className="text-muted-foreground">Signed in as</dt>
-          <dd className="font-semibold">{user.email}</dd>
-        </div>
-        <div>
-          <dt className="text-muted-foreground">2-step verification</dt>
-          <dd>
-            {user.aal === "aal2" ? <Badge variant="success">Verified this session</Badge> : <Badge variant="neutral">Not used</Badge>}
-          </dd>
-        </div>
-        {platformAdmin ? (
-          <div>
-            <dt className="text-muted-foreground">Platform</dt>
-            <dd>
-              <Badge variant="info">Platform admin</Badge>
-            </dd>
-          </div>
+      <p className="text-sm">
+        Signed in as <span className="font-semibold">{user.email}</span>
+        {user.aal === "aal2" ? (
+          <Badge variant="success" className="ml-2">
+            2-step verified
+          </Badge>
         ) : null}
-      </dl>
-      <div>
-        <h2 className="mb-3 text-xl">Your hostels</h2>
-        {memberships.length === 0 ? (
-          <p className="text-sm text-muted-foreground">You are not a member of any hostel yet.</p>
-        ) : (
-          <ul className="divide-y divide-border rounded-sm border border-border">
-            {memberships.map((m) => (
-              <li key={m.tenantId} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+      </p>
+      {memberships.length === 0 && !platformAdmin ? (
+        <p className="text-sm text-muted-foreground">
+          You are not a member of any hostel yet. Ask the hostel&apos;s admin to invite you.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border rounded-sm border border-border">
+          {platformAdmin ? (
+            <li>
+              <Link href="/platform" className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted">
+                <span className="font-semibold">Platform administration</span>
+                <Badge variant="info">Platform admin</Badge>
+              </Link>
+            </li>
+          ) : null}
+          {memberships.map((m) => (
+            <li key={m.tenantId}>
+              <Link href={`/t/${m.slug}`} className="flex min-h-14 items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted">
                 <span className="font-semibold">{m.name}</span>
                 <Badge variant={m.role === "hostel_admin" ? "default" : "outline"}>
                   {m.role === "hostel_admin" ? "Hostel admin" : "Staff"}
                 </Badge>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
       <form action={signOut}>
+        <input type="hidden" name="redirectTo" value="/sign-in" />
         <Button type="submit" variant="outline" className="w-full">
           Sign out
         </Button>
@@ -67,7 +67,7 @@ async function Account() {
 
 export default function AccountPage() {
   return (
-    <AuthCard eyebrow="AdeStay" title="Your account">
+    <AuthCard eyebrow="AdeStay" title="Choose a workspace">
       <Suspense fallback={<FormSkeleton />}>
         <Account />
       </Suspense>

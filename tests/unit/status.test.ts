@@ -5,9 +5,10 @@ import {
   invoiceStatus,
   paymentStatus,
   reservationStatus,
+  tenantStatus,
 } from "@/lib/status";
 
-const maps = { bookingRequestStatus, reservationStatus, bedAllocationStatus, invoiceStatus, paymentStatus };
+const maps = { bookingRequestStatus, reservationStatus, bedAllocationStatus, invoiceStatus, paymentStatus, tenantStatus };
 
 describe("status maps", () => {
   it.each(Object.entries(maps))("%s has a non-empty label and a known tone for every state", (_, map) => {

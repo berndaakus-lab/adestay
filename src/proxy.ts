@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { getAppHosts, isSupabaseConfigured } from "@/lib/server/env";
+import { getAppHosts, isSupabaseConfigured, isTenantPreviewEnabled } from "@/lib/server/env";
 import { nextWithSessionRefresh } from "@/lib/server/supabase/proxy-session";
 import { handleProxyRequest } from "@/lib/server/tenant/proxy-handler";
 import { resolveTenantByHost } from "@/lib/server/tenant/resolve";
@@ -10,6 +10,7 @@ export async function proxy(request: NextRequest) {
     appHosts: getAppHosts(),
     resolveTenant: resolveTenantByHost,
     supabaseConfigured: isSupabaseConfigured(),
+    tenantPreview: isTenantPreviewEnabled(),
     // Refresh the Supabase session cookies when Supabase is configured.
     next: isSupabaseConfigured() ? nextWithSessionRefresh : undefined,
   });

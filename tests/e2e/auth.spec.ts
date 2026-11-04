@@ -10,7 +10,7 @@ test("staff sign-in page shows labelled fields and a working reset link", async 
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
 });
 
-test("student portal pages do not exist on the staff (app) host", async ({ page }) => {
+test("student portal pages return 404 on the staff (app) host", async ({ page }) => {
   const response = await page.goto("/portal/sign-in");
   expect(response?.status()).toBe(404);
 });

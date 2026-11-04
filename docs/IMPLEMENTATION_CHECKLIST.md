@@ -67,8 +67,8 @@ None. This phase is documentation only. No application code, migrations or depen
 - [x] 3. Supabase project link + first migrations (tenancy, memberships, residents, permissions, audit log) + seed data — done (2026-10-26); applied to hosted dev by the product owner via SQL Editor (2026-10-26)
 - [x] 4. RLS policies, helper functions and pgTAP tenant-isolation tests — done and passing locally (2026-10-26); applied to hosted dev 2026-10-26
 - [x] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule — done (2026-10-26); migration `20261026160000` to be applied to hosted dev
-- [~] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP — code, tests and screens done (2026-11-04); **hosted verification pending**: Supabase Auth dashboard settings, migrations `20261026160000` + `20261104100000`, demo accounts, then a real sign-in / MFA / email-code run on Vercel staging
-- [ ] 7. Public, staff and platform shells; 404 / 403 / suspended pages
+- [x] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP — done (2026-11-04). Hosted on staging: staff password sign-in and admin TOTP setup + verification confirmed by the product owner; student email-code sign-in to be confirmed via the staging hostel preview (task 7)
+- [x] 7. Public, staff and platform shells; 404 / 403 / suspended pages — done locally (2026-11-04); migration `20261104120000` to be applied; staging preview needs product-owner approval (see task 7 notes)
 - [ ] 8. GitHub Actions CI and `.env.example`
 
 ### Blockers / needs from product owner
@@ -117,6 +117,25 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-11-04 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` (sign-in pages as partial prerender) | 0 problems / passed / succeeded |
 | 2026-11-04 | 6 | Visual check: /sign-in with validation errors (desktop), /forgot-password (390 px mobile) | Matches design system |
 | 2026-11-04 | 6 | **Hosted (Vercel staging + Supabase dev), product owner:** staff password sign-in → /account; account with no memberships, MFA not required ("Not used"), "Your hostels" empty via `my_memberships` | Passed — confirms Supabase connection, Vercel app-host fix and that migration `20261026160000` is applied |
+
+| 2026-11-04 | 6 | **Hosted, product owner:** hostel admin sign-in forced TOTP setup; code accepted; workspace reached | Passed |
+| 2026-11-04 | 7 | `npm test` (unit 118 + db 12 files incl. pgTAP 008 slug resolver) | All passed |
+| 2026-11-04 | 7 | `CI=1 npx playwright test` (30 tests: 404 status + page, wrong-surface 404, staff/platform redirects, landing link, axe incl. 404 page) | 30/30 passed |
+| 2026-11-04 | 7 | Live server: wrong-surface path → `404` + `cache-control: private, no-store`; `/hostel-not-found` → 404 with hostel message | As expected |
+| 2026-11-04 | 7 | `npm run lint`, `npm run typecheck`, `npm run build` | 0 problems / passed / succeeded |
+
+### Task 7 notes
+- Database part: migration `20261104120000_add_resolve_tenant_by_slug.sql` (`public.resolve_tenant_by_slug`, public facts only, archived excluded); pgTAP 008 (5 assertions); function whitelist test updated.
+- **Hostel sites have their own route tree:** the proxy rewrites a hostel domain internally to `/sites/{slug}/...` (visitors keep clean URLs). Pages call `getSiteTenant(slug)`, which on a hostel domain requires the host to resolve to that same slug, so the slug can never select another tenant. `/sites` typed on a hostel domain is a 404. Implements SYSTEM_ARCHITECTURE §3's `(tenant)` tree.
+- **Staging preview of hostel sites — needs product-owner approval:** on the app host, `/sites/{slug}` works outside production (`VERCEL_ENV !== "production"`, can be forced off with `ADESTAY_TENANT_PREVIEW=off`) and shows a "Staging preview" banner. Purpose: test public sites and student email-code sign-in before a domain exists. Deviation from "tenant chosen by host only"; it selects public content only (authorization unchanged) and is off in production.
+- Public site shell: header (hostel logo/name, Contact, Student portal), footer, home (hero from profile tagline/about, rooms section with an honest "listings on their way" empty state until Phases 2-3, contact + Ghana Post GPS + landmark directions, call and WhatsApp buttons). Suspended hostels show a "not taking bookings" notice; the student portal stays available (D-16).
+- Student portal moved to `/sites/[slug]/portal` (sign-in + placeholder); student actions check the site, so they work on the hostel domain and in preview.
+- Staff workspace `/t/[tenantSlug]`: sidebar from the Figma navigation filtered by permissions; unbuilt sections marked "Soon" (not dead links); mobile menu as a disclosure; switch hostel; sign out. Non-members get 404.
+- Platform `/platform`: requires MFA + platform admin (404 otherwise); tenant directory through RLS (operational data only).
+- `/account` is now the workspace chooser (one hostel → straight to its workspace).
+- 404s: the proxy rewrites wrong-surface paths and unknown hosts to targets that raise `notFound()` (a rewrite's own status is not kept by Next.js), with `cache-control: private, no-store` so a host that later becomes a hostel domain is never served a cached 404. Styled 404, "hostel not found", 403 component, suspended notice and error page (shows only a reference id).
+- Fixed: `createSupabaseServerClient` now reads cookies before env, so pages using it are never prerendered at build time.
+- Not verifiable locally (no Supabase keys): staff shell, platform page and hostel site rendering with data — check on staging.
 
 ### Task 6 notes
 - Database part: migration `20261104100000_protect_last_hostel_admin.sql` — trigger blocks revoking, demoting or deleting the last active hostel admin of a non-archived tenant (Phase 1 acceptance criterion 4); pgTAP 007 (8 assertions).

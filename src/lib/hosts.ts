@@ -43,7 +43,10 @@ export const HEADER_TENANT_STATUS = "x-adestay-tenant-status";
  * Pages still check their surface themselves as defence in depth.
  */
 const TENANT_ONLY_PREFIXES = ["/portal"];
-const APP_ONLY_PREFIXES = ["/sign-in", "/forgot-password", "/reset-password", "/mfa", "/account", "/auth", "/t", "/platform"];
+const APP_ONLY_PREFIXES = ["/sign-in", "/forgot-password", "/reset-password", "/mfa", "/account", "/auth", "/t", "/platform", "/design-system"];
+
+/** Internal route tree for hostel sites; tenant hosts are rewritten to /sites/{slug}/... */
+export const SITES_PREFIX = "/sites";
 
 function matchesPrefix(path: string, prefixes: string[]): boolean {
   return prefixes.some((p) => path === p || path.startsWith(`${p}/`));
