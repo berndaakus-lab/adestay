@@ -9,7 +9,7 @@
 | Phase | Status | Approved by / date |
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
-| 1: Foundation & Security | **Approved, in progress** | Product owner, in chat, 2026-10-26 |
+| 1: Foundation & Security | **Code complete (2026-11-11); hosted verification items open; awaiting product-owner sign-off** | Approved to start: product owner, in chat, 2026-10-26 |
 | 2: Tenant setup & Administration | Not started | — |
 | 3: Public sites & Booking | Not started | — |
 | 4: Student portal & Allocation | Not started | — |
@@ -128,6 +128,27 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-11-10 | 8 | Bundle check probes: planted `service_role` JWTs (2 shapes) detected; `anon` JWT allowed; real-key mode active when the key is set | As expected |
 | 2026-11-10 | 8 | gitleaks 8.30.1 (checksum-verified) over full history | 17 commits, no leaks |
 | 2026-11-10 | 8 | `npm audit --omit=dev --audit-level=high` | 0 vulnerabilities (after moving `shadcn` to devDependencies) |
+
+| 2026-11-11 | 8 | **GitHub Actions CI run 42926799246** on `staging` (checks, e2e, security) | All 3 jobs passed |
+| 2026-11-11 | close | pgTAP 005 +1 assertion: break-glass grant visible in the tenant's audit log (criterion 5) | 12/12 db files passed (53 assertions in 005) |
+
+### Phase 1 acceptance criteria (IMPLEMENTATION_PLAN §2)
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | typecheck, lint, unit, pgTAP, e2e pass and are recorded | **Met** | Test results above; CI run 42926799246 green |
+| 2 | Tenant A gets 0 rows / is denied on tenant B for every Phase 1 table; anon reads nothing private | **Met** (database level) | pgTAP 001 + 005, run as the `anon`/`authenticated` roles with JWT claims exactly as PostgREST does. Not yet repeated over HTTP against the hosted project |
+| 3 | Spoofed Host / `x-tenant-id` do not change the tenant | **Met** | Unit tests (proxy strips headers; host alone decides); live server check (task 5) |
+| 4 | No membership changes without `staff.manage`; no self-elevation; last admin cannot be removed | **Met** | pgTAP 002, 005 (no direct writes for API roles), 007 (last-admin trigger) |
+| 5 | Platform admin aal1 denied, aal2 allowed; no residents without break-glass; grant appears in tenant audit log | **Met** | pgTAP 005, 006; hosted: admin TOTP verified on staging |
+| 6 | CI fails if any public table lacks RLS | **Met** | pgTAP 001 in CI db job |
+| 7 | Client bundle contains no service-role key (automated) | **Met** | `npm run check:bundle` in CI; planted-key probes detected |
+| 8 | Lighthouse accessibility ≥ 95 on sign-in and public shell | **Partly met** | axe WCAG 2.2 AA scans (0 serious/critical) on sign-in, reset, landing, 404, design system; Lighthouse itself not run; public hostel shell not scanned (needs Supabase data) |
+
+### Open before Phase 1 sign-off (product owner)
+- [ ] Apply migrations `20261104100000` (if not already) and `20261104120000` on hosted dev.
+- [ ] Decide on the staging hostel preview (`/sites/{slug}` outside production) — approve or remove.
+- [ ] Student email-code sign-in on staging (via the preview) — needs the Magic Link template `{{ .Token }}` and an email on the Supabase team (D-9 for everyone else).
+- [ ] Optional: GitHub branch protection on `main` requiring CI.
 
 ### Task 8 notes
 - `.github/workflows/ci.yml`: jobs **checks**, **e2e** (reuses the build artifact) and **security**; triggers on push to `staging`, PRs into `staging`/`main`, manual dispatch; read-only token; concurrency cancels superseded runs. Actions pinned to current majors (checkout v7, setup-node v7, upload-artifact v7, download-artifact v8).

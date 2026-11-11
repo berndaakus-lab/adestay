@@ -1,7 +1,7 @@
 -- Tenant isolation and role matrix (docs/RBAC_MATRIX.md §4, Phase 1 acceptance criteria 2, 4, 5).
 -- Every query below runs as the API role with a forged-but-valid JWT, exactly as PostgREST would.
 begin;
-select plan(52);
+select plan(53);
 
 -- ---------------------------------------------------------------------------
 -- Test helpers: impersonate a user (role + JWT claims) for the rest of the transaction.
@@ -181,6 +181,9 @@ select tests.as_owner();
 select tests.as_user('00000000-0000-4000-8000-0000000000b1');
 select is((select array_agg(full_name) from public.residents), array['Yaw Boateng'], 'admin B: sees only B residents');
 select is((select count(*)::int from public.permission_sets), 4, 'admin B: does not see A custom sets');
+select ok(exists (select 1 from public.audit_logs where action = 'platform_access_grants.created'
+                  and tenant_id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'),
+  'admin B: the platform break-glass grant on B appears in B audit log (acceptance criterion 5)');
 select is((select count(*)::int from public.user_profiles where id = '00000000-0000-4000-8000-0000000000a2'), 0,
   'admin B: cannot see A staff profiles');
 select tests.as_owner();
