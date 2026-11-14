@@ -235,7 +235,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 
 ### Tasks
 - [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` to be applied on hosted dev
-- [ ] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP
+- [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` to be applied on hosted dev
 - [ ] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP
 - [ ] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP
 - [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
@@ -267,6 +267,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-14 | 1 | Mutation check: `rooms_select` changed to `using (true or …)` | 009 failed 6 assertions as expected; migration restored |
 | 2026-11-14 | 1 | `npm test` (unit + db) | 131/131 passed |
 | 2026-11-14 | 1 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-14 | 1 | **GitHub Actions CI run 43641651223** on `staging` (commit `c0d9379`) | All 3 jobs passed |
+| 2026-11-14 | 2 | `npm run test:db` (14 files; new pgTAP 010 with 24 assertions on a 50-bed hostel) | 14/14 passed |
+| 2026-11-14 | 2 | Mutation checks: (a) released blocks counted as live; (b) permission check removed from `public.room_type_capacity` | (a) 2 assertions failed, (b) 5 failed, as expected; migration restored |
+| 2026-11-14 | 2 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 132/132 passed / 0 problems / passed |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -276,3 +280,9 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Bed blocks are never deleted (no DELETE grant): released by setting `released_at`; `created_by`/`released_by` come from the session; a released block is frozen. Overlapping live blocks on one bed are refused by the exclusion constraint (23P01).
 - Delete behaviour: deleting a room type is refused while rooms use it; deleting a room removes its beds unless a bed has block history (refused). Later workflow tables will reference beds/periods with `restrict`.
 - Hosted dev: first check which Phase 1 migrations are applied (`select to_regprocedure('app.protect_last_hostel_admin()') is not null as m_20261104100000, to_regprocedure('app.resolve_tenant_by_slug(text)') is not null as m_20261104120000;`). If both are true, paste `npm run db:bundle -- --since 20261104120000 --no-seed`; if both are false, `--since 20261026160000`. Record the result in "Last migration applied" above.
+
+### Task 2 notes
+- Migration `20261114110000_add_room_type_capacity.sql`. `app.room_type_capacity(tenant, period?)` is the single implementation (SECURITY DEFINER, **no API grants**) so the Phase 3 approval RPC can count every bed under its room-type lock. Staff call `public.room_type_capacity(tenant, period?)`, which returns rows only with `inventory.read`, `inventory.manage` or break-glass (no rows otherwise, consistent with "404 for reads"); not granted to anon, since exact counts are not public (D-4).
+- Per room type × non-archived period: `total_beds` (non-retired beds in non-retired rooms), `out_of_service_beds` (bed or room in maintenance), `blocked_beds` (in service but a live block overlaps any day of the period), `sellable_beds`. A bed blocked for part of a period is not sellable for that period. Room types without rooms return zeros rather than no row.
+- Acceptance criterion 2 (database part) covered by pgTAP 010: a 50-bed hostel with retired, maintenance, blocked, released-block and boundary-day cases. Live reservations are subtracted in Phase 3 (BOOKING_AND_PAYMENT_FLOWS §3 capacity rule); the UI capacity table comes in task 13.
+- Hosted dev: same check as task 1; the bundle `--since 20261104120000 --no-seed` now contains both Phase 2 migrations.
