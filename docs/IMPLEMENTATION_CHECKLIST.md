@@ -9,8 +9,8 @@
 | Phase | Status | Approved by / date |
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
-| 1: Foundation & Security | **Code complete (2026-11-11); hosted verification items open; awaiting product-owner sign-off** | Approved to start: product owner, in chat, 2026-10-26 |
-| 2: Tenant setup & Administration | Not started | — |
+| 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
+| 2: Tenant setup & Administration | **Approved, not started** (to be run in a new session) | Product owner, in chat, 2026-11-14 |
 | 3: Public sites & Booking | Not started | — |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
