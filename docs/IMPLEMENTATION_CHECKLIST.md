@@ -74,7 +74,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
-- Last migration applied to hosted dev: `20261026160000_add_server_access_rpcs.sql` (inferred 2026-11-04: `/account` loaded memberships on staging); `20261104100000` not yet confirmed. Before that: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
+- Last migration applied to hosted dev: **`20261114110000_add_room_type_capacity.sql`** (confirmed 2026-11-14 by the product owner with a catalog query: 20261104100000, 20261104120000, 20261114100000 (complete) and 20261114110000 present; 20261114120000 absent). A re-run of a bundle that included 20261114110000 failed with 42723 "function room_type_capacity already exists" and changed nothing. **Next bundle: `npm run db:bundle -- --since 20261114110000 --no-seed`.** Earlier: `20261026160000_add_server_access_rpcs.sql` (inferred 2026-11-04). Before that: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 - [ ] **Task 6 hosted setup (product owner, Supabase dashboard)** — see DEPLOYMENT_AND_OPERATIONS §3a: URL configuration (Site URL + `/auth/callback` redirect URLs), minimum password length 12, TOTP MFA enabled, Magic Link email template shows `{{ .Token }}`, OTP expiry 600 s. Then apply migrations `20261026160000` and `20261104100000`, create demo accounts and run `supabase/dev/link-demo-users.sql`.
 - [ ] **D-9 email provider** needed before students outside the Supabase team can receive codes: Supabase's built-in email only delivers to project team members and is heavily rate-limited.
@@ -145,7 +145,7 @@ None. This phase is documentation only. No application code, migrations or depen
 | 8 | Lighthouse accessibility ≥ 95 on sign-in and public shell | **Partly met** | axe WCAG 2.2 AA scans (0 serious/critical) on sign-in, reset, landing, 404, design system; Lighthouse itself not run; public hostel shell not scanned (needs Supabase data) |
 
 ### Open before Phase 1 sign-off (product owner)
-- [ ] Apply migrations `20261104100000` (if not already) and `20261104120000` on hosted dev.
+- [x] Apply migrations `20261104100000` and `20261104120000` on hosted dev (confirmed present 2026-11-14).
 - [x] Decide on the staging hostel preview (`/sites/{slug}` outside production): **approved** by the product owner (in chat, 2026-11-14), kept until D-1; off in production.
 - [ ] Student email-code sign-in on staging (via the preview) — needs the Magic Link template `{{ .Token }}` and an email on the Supabase team (D-9 for everyone else).
 - [ ] Optional: GitHub branch protection on `main` requiring CI.
@@ -234,8 +234,8 @@ None. This phase is documentation only. No application code, migrations or depen
 Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, validation) → UI.
 
 ### Tasks
-- [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` to be applied on hosted dev
-- [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` to be applied on hosted dev
+- [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` applied on hosted dev (confirmed 2026-11-14)
+- [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` to be applied on hosted dev
 - [ ] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP
 - [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
