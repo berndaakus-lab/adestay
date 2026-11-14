@@ -10,7 +10,7 @@
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
-| 2: Tenant setup & Administration | **Approved, not started** (to be run in a new session) | Product owner, in chat, 2026-11-14 |
+| 2: Tenant setup & Administration | **In progress** (task breakdown and decisions approved 2026-11-14) | Product owner, in chat, 2026-11-14 |
 | 3: Public sites & Booking | Not started | — |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
@@ -146,7 +146,7 @@ None. This phase is documentation only. No application code, migrations or depen
 
 ### Open before Phase 1 sign-off (product owner)
 - [ ] Apply migrations `20261104100000` (if not already) and `20261104120000` on hosted dev.
-- [ ] Decide on the staging hostel preview (`/sites/{slug}` outside production) — approve or remove.
+- [x] Decide on the staging hostel preview (`/sites/{slug}` outside production): **approved** by the product owner (in chat, 2026-11-14), kept until D-1; off in production.
 - [ ] Student email-code sign-in on staging (via the preview) — needs the Magic Link template `{{ .Token }}` and an email on the Supabase team (D-9 for everyone else).
 - [ ] Optional: GitHub branch protection on `main` requiring CI.
 
@@ -228,3 +228,51 @@ None. This phase is documentation only. No application code, migrations or depen
 - shadcn's preset uses the `cn` package (published by shadcn, repo `shadcn-ui/cn`) instead of `clsx` + `tailwind-merge`.
 - `npm run typecheck` runs `next typegen` first because Next 16 generates global route types (`LayoutProps`).
 - Next 16 ships its own docs in `node_modules/next/dist/docs/`; `AGENTS.md` (managed by `next dev`) says to read them before writing app code.
+
+## Phase 2: Tenant setup & Administration (started 2026-11-14)
+
+Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, validation) → UI.
+
+### Tasks
+- [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` to be applied on hosted dev
+- [ ] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP
+- [ ] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP
+- [ ] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP
+- [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
+- [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
+- [ ] 7. Upload pipeline: magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths; polyglot tests
+- [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
+- [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
+- [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
+- [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
+- [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
+- [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
+- [ ] 14. E2E + axe (desktop, 360 px), acceptance review
+
+### Decisions (product owner, in chat, 2026-11-14: "Approve defaults")
+| Decision | Outcome |
+|---|---|
+| Staging hostel preview `/sites/{slug}` | Approved; stays until D-1; off in production |
+| CSV import of rooms/beds | In scope (task 9); hand-written strict parser (no new dependency), preview before commit, ≤ 500 rows |
+| Custom domains | Product owner creates a scoped Vercel token and sets `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`; until then domain status is set manually in the platform UI |
+| `sharp` | Approved as a direct dependency (EXIF stripping by re-encoding) |
+| Invites | Supabase `inviteUserByEmail` from the allow-listed provisioning module; membership `invited` → `active` on first sign-in with that email. Needs D-9 for addresses outside the Supabase team |
+| Room photos | Public `tenant-public` bucket (DATABASE_DESIGN §6); private bucket waits for Phase 5a |
+| D-9 email provider, D-1 root domain | Still open (Resend or Postmark recommended; D-1 needed for "subdomain live" in acceptance criterion 1) |
+
+### Test results
+| Date | Task | Command | Result |
+|---|---|---|---|
+| 2026-11-14 | 1 | `npm run test:db` (12 → 13 files; new pgTAP 009 with 54 assertions; 001 updated to 18 tables, anon read list and "anon writes nothing") | 13/13 passed |
+| 2026-11-14 | 1 | Mutation check: `rooms_select` changed to `using (true or …)` | 009 failed 6 assertions as expected; migration restored |
+| 2026-11-14 | 1 | `npm test` (unit + db) | 131/131 passed |
+| 2026-11-14 | 1 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 1 notes
+- Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
+- Writes are single-row edits through RLS policies (DATABASE_DESIGN §3 exception for simple edits): `inventory.manage` for periods, room types, photos, rooms, beds, blocks; `pricing.manage` for prices. `tenant_id`, `id` and fixed parent keys (photo's room type, block's bed, price's type/period) are **not** in the UPDATE column grants, so rows cannot be moved to another hostel.
+- Reads: anon (and everyone) see open/closed periods, published room types, their photos, and prices of published types in open periods, all only for active hostels. Every member reads periods, room types, photos and prices; rooms, beds and blocks need `inventory.read` or `inventory.manage`; break-glass gives read only. Suspended hostels: staff see nothing, public content disappears.
+- Additions within the design (no change of intent): a room can never hold more non-retired beds than its room type's `occupancy` (trigger `app.enforce_room_occupancy`, locks the room row; also checked when a room changes type or occupancy is lowered); period names unique per hostel; price ≤ GH₵ 1,000,000 to catch unit mistakes; photo `storage_path` must sit in `{tenant_id}/room-types/{room_type_id}/`; `stay` is computed through a `CASE` so a backwards period reports a check violation (23514) rather than a range error.
+- Bed blocks are never deleted (no DELETE grant): released by setting `released_at`; `created_by`/`released_by` come from the session; a released block is frozen. Overlapping live blocks on one bed are refused by the exclusion constraint (23P01).
+- Delete behaviour: deleting a room type is refused while rooms use it; deleting a room removes its beds unless a bed has block history (refused). Later workflow tables will reference beds/periods with `restrict`.
+- Hosted dev: first check which Phase 1 migrations are applied (`select to_regprocedure('app.protect_last_hostel_admin()') is not null as m_20261104100000, to_regprocedure('app.resolve_tenant_by_slug(text)') is not null as m_20261104120000;`). If both are true, paste `npm run db:bundle -- --since 20261104120000 --no-seed`; if both are false, `--since 20261026160000`. Record the result in "Last migration applied" above.
