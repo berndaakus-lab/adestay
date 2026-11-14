@@ -9,8 +9,8 @@
 | Phase | Status | Approved by / date |
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
-| 1: Foundation & Security | **Approved, in progress** | Product owner, in chat, 2026-10-26 |
-| 2: Tenant setup & Administration | Not started | — |
+| 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
+| 2: Tenant setup & Administration | **Approved, not started** (to be run in a new session) | Product owner, in chat, 2026-11-14 |
 | 3: Public sites & Booking | Not started | — |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
@@ -69,7 +69,7 @@ None. This phase is documentation only. No application code, migrations or depen
 - [x] 5. Host → tenant resolution middleware, `getTenantContext`, `requirePermission`, service-role allow-list lint rule — done (2026-10-26); migration `20261026160000` to be applied to hosted dev
 - [x] 6. Auth: staff email + password with TOTP MFA for admins; student email OTP — done (2026-11-04). Hosted on staging: staff password sign-in and admin TOTP setup + verification confirmed by the product owner; student email-code sign-in to be confirmed via the staging hostel preview (task 7)
 - [x] 7. Public, staff and platform shells; 404 / 403 / suspended pages — done locally (2026-11-04); migration `20261104120000` to be applied; staging preview needs product-owner approval (see task 7 notes)
-- [ ] 8. GitHub Actions CI and `.env.example`
+- [x] 8. GitHub Actions CI and `.env.example` — done (2026-11-10)
 
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
@@ -123,6 +123,39 @@ None. This phase is documentation only. No application code, migrations or depen
 | 2026-11-04 | 7 | `CI=1 npx playwright test` (30 tests: 404 status + page, wrong-surface 404, staff/platform redirects, landing link, axe incl. 404 page) | 30/30 passed |
 | 2026-11-04 | 7 | Live server: wrong-surface path → `404` + `cache-control: private, no-store`; `/hostel-not-found` → 404 with hostel message | As expected |
 | 2026-11-04 | 7 | `npm run lint`, `npm run typecheck`, `npm run build` | 0 problems / passed / succeeded |
+
+| 2026-11-10 | 8 | Full CI sequence locally: typecheck, lint, unit (118), db (12 files), build, bundle check, Playwright (30) | All passed |
+| 2026-11-10 | 8 | Bundle check probes: planted `service_role` JWTs (2 shapes) detected; `anon` JWT allowed; real-key mode active when the key is set | As expected |
+| 2026-11-10 | 8 | gitleaks 8.30.1 (checksum-verified) over full history | 17 commits, no leaks |
+| 2026-11-10 | 8 | `npm audit --omit=dev --audit-level=high` | 0 vulnerabilities (after moving `shadcn` to devDependencies) |
+
+| 2026-11-11 | 8 | **GitHub Actions CI run 42926799246** on `staging` (checks, e2e, security) | All 3 jobs passed |
+| 2026-11-11 | close | pgTAP 005 +1 assertion: break-glass grant visible in the tenant's audit log (criterion 5) | 12/12 db files passed (53 assertions in 005) |
+
+### Phase 1 acceptance criteria (IMPLEMENTATION_PLAN §2)
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | typecheck, lint, unit, pgTAP, e2e pass and are recorded | **Met** | Test results above; CI run 42926799246 green |
+| 2 | Tenant A gets 0 rows / is denied on tenant B for every Phase 1 table; anon reads nothing private | **Met** (database level) | pgTAP 001 + 005, run as the `anon`/`authenticated` roles with JWT claims exactly as PostgREST does. Not yet repeated over HTTP against the hosted project |
+| 3 | Spoofed Host / `x-tenant-id` do not change the tenant | **Met** | Unit tests (proxy strips headers; host alone decides); live server check (task 5) |
+| 4 | No membership changes without `staff.manage`; no self-elevation; last admin cannot be removed | **Met** | pgTAP 002, 005 (no direct writes for API roles), 007 (last-admin trigger) |
+| 5 | Platform admin aal1 denied, aal2 allowed; no residents without break-glass; grant appears in tenant audit log | **Met** | pgTAP 005, 006; hosted: admin TOTP verified on staging |
+| 6 | CI fails if any public table lacks RLS | **Met** | pgTAP 001 in CI db job |
+| 7 | Client bundle contains no service-role key (automated) | **Met** | `npm run check:bundle` in CI; planted-key probes detected |
+| 8 | Lighthouse accessibility ≥ 95 on sign-in and public shell | **Partly met** | axe WCAG 2.2 AA scans (0 serious/critical) on sign-in, reset, landing, 404, design system; Lighthouse itself not run; public hostel shell not scanned (needs Supabase data) |
+
+### Open before Phase 1 sign-off (product owner)
+- [ ] Apply migrations `20261104100000` (if not already) and `20261104120000` on hosted dev.
+- [ ] Decide on the staging hostel preview (`/sites/{slug}` outside production) — approve or remove.
+- [ ] Student email-code sign-in on staging (via the preview) — needs the Magic Link template `{{ .Token }}` and an email on the Supabase team (D-9 for everyone else).
+- [ ] Optional: GitHub branch protection on `main` requiring CI.
+
+### Task 8 notes
+- `.github/workflows/ci.yml`: jobs **checks**, **e2e** (reuses the build artifact) and **security**; triggers on push to `staging`, PRs into `staging`/`main`, manual dispatch; read-only token; concurrency cancels superseded runs. Actions pinned to current majors (checkout v7, setup-node v7, upload-artifact v7, download-artifact v8).
+- Acceptance criterion 6 (CI fails if a public table lacks RLS): pgTAP 001 runs in the db job. Criterion 7 (no service-role key in the client bundle): `npm run check:bundle` runs after the build. The first bundle check used fixed base64 fragments and missed a planted token with a different byte alignment; replaced by decoding every JWT-shaped token.
+- `shadcn` moved to devDependencies: it is a build-time CLI/CSS package; its transitive `deepmerge`/`minimatch` advisories (low/moderate) no longer appear in the production audit.
+- `.env.example` lists every variable from DEPLOYMENT_AND_OPERATIONS §2 with empty values and comments (including `ADESTAY_TENANT_PREVIEW`).
+- Recommended for the product owner (GitHub settings): require the CI checks to pass before merging into `main` (branch protection).
 
 ### Task 7 notes
 - Database part: migration `20261104120000_add_resolve_tenant_by_slug.sql` (`public.resolve_tenant_by_slug`, public facts only, archived excluded); pgTAP 008 (5 assertions); function whitelist test updated.

@@ -67,11 +67,12 @@ Vercel: no extra variables are needed for the staging host (the app reads Vercel
 
 ## 4. CI/CD
 
-GitHub Actions on every PR (once a GitHub remote is created [D-18]):
-1. Install → typecheck (`tsc --noEmit`) → lint (ESLint, including the "no service-role import outside allow-list" rule) → unit tests (Vitest).
-2. Spin up local Supabase → apply migrations → **pgTAP RLS/isolation tests** → integration tests.
-3. Playwright E2E (smoke on PRs, full nightly) against the local stack.
-4. Secret scan (gitleaks) and `npm audit --omit=dev` (high severity fails the build).
+GitHub Actions (`.github/workflows/ci.yml`, implemented in Phase 1 task 8) on every push to `staging` and every pull request into `staging` or `main`. No secrets are needed.
+1. **checks:** `npm ci` → typecheck (`next typegen` + `tsc`) → lint (ESLint, including the service-role allow-list rule) → unit tests → **database tests**: every migration applied in order to PGlite (in-process Postgres) plus all pgTAP files, including "every public table has RLS forced" and the tenant-isolation suite → build → **client bundle check** (`scripts/check-client-bundle.mjs`: no service-role key name, `sb_secret_` key, `service_role` JWT or real key value in `.next/static`).
+2. **e2e:** Playwright on desktop and mobile Chromium against the built app, including axe WCAG 2.2 AA scans.
+3. **security:** gitleaks over the full git history (checksum-verified binary) and `npm audit --omit=dev --audit-level=high`.
+
+(The original plan ran a local Supabase stack in CI; PGlite gives the same migration + pgTAP coverage without Docker and matches local testing.)
 5. Vercel deploys through its Git integration (set up by the product owner): `staging` → staging, `main` → production.
 
 **How migrations reach Supabase (decided 2026-10-26, same as ugs-kitchen-v2):** the app uses only the URL, anon key and service-role key from Vercel. Schema changes are applied by the product owner in the Supabase SQL Editor using the bundle from `npm run db:bundle` (`--since <timestamp>` for new migrations only). The checklist records the last migration applied to each environment. Supabase CLI or GitHub Actions automation can replace this later.
