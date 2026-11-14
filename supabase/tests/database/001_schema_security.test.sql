@@ -91,7 +91,7 @@ select is(
   (select coalesce(array_agg(p.proname::text order by p.proname), '{}')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('app', 'private') and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
+  array['brand_color_is_readable', 'can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
         'is_hostel_admin', 'is_platform_admin', 'is_tenant_member', 'my_resident_id',
         'permission_catalog', 'resolve_tenant_by_host', 'resolve_tenant_by_slug', 'tenant_is_active', 'valid_permissions']::text[],
   'authenticated can execute only the whitelisted app helpers'

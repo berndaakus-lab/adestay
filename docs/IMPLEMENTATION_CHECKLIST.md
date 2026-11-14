@@ -236,7 +236,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 ### Tasks
 - [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` to be applied on hosted dev
 - [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` to be applied on hosted dev
-- [ ] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP
+- [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` to be applied on hosted dev
 - [ ] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP
 - [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
 - [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
@@ -271,6 +271,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-14 | 2 | `npm run test:db` (14 files; new pgTAP 010 with 24 assertions on a 50-bed hostel) | 14/14 passed |
 | 2026-11-14 | 2 | Mutation checks: (a) released blocks counted as live; (b) permission check removed from `public.room_type_capacity` | (a) 2 assertions failed, (b) 5 failed, as expected; migration restored |
 | 2026-11-14 | 2 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 132/132 passed / 0 problems / passed |
+| 2026-11-14 | 2 | **GitHub Actions CI run 43645173872** on `staging` (commit `f16ca60`) | Passed |
+| 2026-11-14 | 3 | `npm run test:db` (15 files; new pgTAP 011 with 52 assertions; 001 whitelist adds `brand_color_is_readable`) | 15/15 passed |
+| 2026-11-14 | 3 | Mutation checks: (a) "cannot change your own membership" guard removed; (b) confirmed-email requirement removed from `accept_my_invitations` | (a) admin demoted themselves and the file aborted at the next invite ("not allowed"); (b) 2 assertions failed; migration restored both times |
+| 2026-11-14 | 3 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 133/133 passed / 0 problems / passed |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -286,3 +290,14 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Per room type × non-archived period: `total_beds` (non-retired beds in non-retired rooms), `out_of_service_beds` (bed or room in maintenance), `blocked_beds` (in service but a live block overlaps any day of the period), `sellable_beds`. A bed blocked for part of a period is not sellable for that period. Room types without rooms return zeros rather than no row.
 - Acceptance criterion 2 (database part) covered by pgTAP 010: a 50-bed hostel with retired, maintenance, blocked, released-block and boundary-day cases. Live reservations are subtracted in Phase 3 (BOOKING_AND_PAYMENT_FLOWS §3 capacity rule); the UI capacity table comes in task 13.
 - Hosted dev: same check as task 1; the bundle `--since 20261104120000 --no-seed` now contains both Phase 2 migrations.
+
+### Task 3 notes
+- Migration `20261114120000_add_staff_and_profile_admin.sql`.
+- **Membership RPCs** (the only API write path; `tenant_memberships` has no write grants): `invite_staff_member(tenant, email, role, set)`, `accept_my_invitations()`, `change_member_role(membership, role, set)`, `revoke_membership(membership, reason)`. Each re-checks `staff.manage` on the row's own tenant, refuses the caller's own membership, lets only hostel admins create or change hostel admins, and refuses granting permissions the caller does not hold (moot in v1 since `staff.manage` is admin-only, but enforced). The Phase 1 trigger still blocks removing the last active admin. Errors: 42501 not allowed (also for unknown ids), 22023 invalid input, 23505 already member/invited.
+- Invitations: email normalised to lower case; re-inviting a former member reopens their row; one open invite per address per hostel (tenant row locked). `accept_my_invitations` activates invites addressed to the caller's **confirmed** email (`auth.users.email_confirmed_at`) — the server calls it after sign-in (task 8). Sending the Supabase invitation email is task 8 (provisioning module). Invitations do not expire (not in the design); can be cancelled with `revoke_membership`.
+- Revocation and invitation cancellation write an explicit audit entry with the reason (`membership.revoked`, `membership.invitation_cancelled`) in addition to the row-change audit.
+- **Brand colours (criterion 3):** `app.brand_color_is_readable(hex)` requires ≥ 4.5:1 with white text on the colour **and** ≥ 4.5:1 for the colour as text on ivory `#f7f5ef` (UI_UX_DESIGN_SYSTEM §2: brand overrides `--brand`/`--brand-contrast`; the stricter pair covers both uses). CHECK constraints on `tenant_profiles.primary_color` and `accent_color`. The task 6 form validator must use the same rule. Example: `#767676` passes on white (4.54) but fails on ivory, so it is refused.
+- Profile hardening: `logo_path`/`hero_image_path` must be `{tenant_id}/branding/<generated>.jpg|png|webp` (no SVG); length limits on tagline, about, address, directions, map URL, policies and terms.
+- Column-level UPDATE grants on `tenant_profiles`, `tenant_settings` and `permission_sets` (no `tenant_id`, `is_system`, `key`), so rows cannot be moved between hostels. Custom permission sets remain direct edits under the Phase 1 policies; system sets stay read-only.
+- Test shim: `auth.users` gained `email_confirmed_at` (exists on Supabase).
+- Hosted dev: same check as task 1; `npm run db:bundle -- --since 20261104120000 --no-seed` now contains the three Phase 2 migrations. If a hosted profile has a low-contrast colour the migration stops with a check violation; set that colour to null first.
