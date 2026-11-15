@@ -13,8 +13,8 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r'),
-  11,
-  'task 3 creates exactly the 11 expected public tables'
+  18,
+  'exactly the 18 expected public tables (Phase 1: 11, Phase 2 inventory: 7)'
 );
 
 select has_table('public', 'tenants', 'tenants exists');
@@ -22,16 +22,23 @@ select has_table('public', 'residents', 'residents exists');
 select has_table('public', 'audit_logs', 'audit_logs exists');
 select has_table('private', 'rate_limits', 'private.rate_limits exists');
 
--- Anonymous visitors can read exactly one table (published hostel profiles) and write nothing.
+-- Anonymous visitors can read only public-content tables (rows further limited by RLS) and write nothing.
 select is(
   (select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r'
      and (has_table_privilege('anon', c.oid, 'select,insert,update,delete,truncate')
        or has_any_column_privilege('anon', c.oid, 'select,insert,update'))),
-  array['tenant_profiles']::text[],
-  'anon can access only tenant_profiles'
+  array['booking_periods', 'room_type_photos', 'room_type_prices', 'room_types', 'tenant_profiles']::text[],
+  'anon can access only the public-content tables'
 );
-select ok(not has_table_privilege('anon', 'public.tenant_profiles', 'insert,update,delete'), 'anon cannot write tenant_profiles');
+select is(
+  (select coalesce(array_agg(c.relname::text order by c.relname), '{}') from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'r'
+     and (has_table_privilege('anon', c.oid, 'insert,update,delete,truncate')
+       or has_any_column_privilege('anon', c.oid, 'insert,update'))),
+  '{}'::text[],
+  'anon cannot write any public table'
+);
 
 -- Signed-in users can never write directly to workflow and history tables (RPC only).
 select is(
@@ -84,7 +91,7 @@ select is(
   (select coalesce(array_agg(p.proname::text order by p.proname), '{}')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname in ('app', 'private') and has_function_privilege('authenticated', p.oid, 'execute')),
-  array['can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
+  array['brand_color_is_readable', 'can_view_user_profile', 'delegable_permissions', 'has_break_glass', 'has_permission',
         'is_hostel_admin', 'is_platform_admin', 'is_tenant_member', 'my_resident_id',
         'permission_catalog', 'resolve_tenant_by_host', 'resolve_tenant_by_slug', 'tenant_is_active', 'valid_permissions']::text[],
   'authenticated can execute only the whitelisted app helpers'
