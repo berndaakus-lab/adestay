@@ -238,7 +238,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` applied on hosted dev (2026-11-14)
 - [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` to be applied on hosted dev
-- [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
+- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migration `20261119100000` to be applied on hosted dev
 - [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
 - [ ] 7. Upload pipeline: magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths; polyglot tests
 - [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
@@ -280,6 +280,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-14 | 4 | `npm run test:db` (16 files; new pgTAP 012 with 50 assertions; 011 re-run against the refactored `invite_staff_member`) | 16/16 passed |
 | 2026-11-14 | 4 | Mutation checks: (a) "custom domain cannot be under the platform domain" removed; (b) "no platform invite once an active admin exists" removed | (a) 2 assertions failed, (b) 1 failed, as expected; migration restored |
 | 2026-11-14 | 4 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 134/134 passed / 0 problems / passed |
+| 2026-11-14 | 4 | **GitHub Actions CI run 43648925464** on `staging` (commit `b4f0b55`) | Passed |
+| 2026-11-19 | 5 | `npm run test:db` (17 files; new pgTAP 013 with 25 assertions; 001 whitelist adds `can_manage_public_asset`) | 17/17 passed |
+| 2026-11-19 | 5 | Mutation checks: (a) "room type belongs to this hostel" changed from `and` to `or`; (b) server-generated name check removed | (a) 5 assertions failed, (b) 4 failed, as expected; migration restored |
+| 2026-11-19 | 5 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -317,3 +321,12 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - RBAC unchanged: a platform admin still cannot read a hostel's settings, memberships or audit log without break-glass. **For the platform UI (task 11)** the tenant detail page needs to show whether the first-admin invitation is open/accepted; that needs a narrow read RPC (invitation email + status only), to be added with task 11.
 - Not in this task: hostel admins requesting a custom domain (RBAC §4) — only platform admins add domains in v1 UI; editing tenant name/legal name after creation; archiving/offboarding.
 - Hosted dev: `npm run db:bundle -- --since 20261114120000 --no-seed`.
+
+### Task 5 notes
+- Migration `20261119100000_create_tenant_public_bucket.sql`: bucket `tenant-public` (public, 5 MB `file_size_limit`, `allowed_mime_types` JPEG/PNG/WebP only, so no SVG at the storage layer) and three policies on `storage.objects`, each limited to this bucket: insert, select (listing) and delete through `app.can_manage_public_asset(name)`. No update policy: objects are never overwritten or renamed (new uploads get new names).
+- `app.can_manage_public_asset` accepts only the server-generated shapes `{tenant_id}/branding/<8-64 [a-z0-9-]>.jpg|png|webp` (needs `settings.manage`) and `{tenant_id}/room-types/{room_type_id}/<name>` (needs `inventory.manage` and a room type of that hostel). Traversal, other folders, other extensions and malformed ids are refused before any uuid cast. Suspended hostels, break-glass and anon cannot write. Same path shapes as the `tenant_profiles` and `room_type_photos` constraints.
+- Public files are served by public URL; nobody but managers can **list** the bucket.
+- PGlite shim: minimal `storage.buckets`, `storage.objects` (RLS on, Supabase's default grants) and `storage.foldername`. Real storage behaviour (bucket limits enforced by the Storage API, policies applied to uploads) must be checked on staging once the upload UI exists (task 13).
+- **Residual risk for product-owner decision:** uploads use the staff member's own session (architecture: user JWT + RLS; no new service-role use). A staff member with `settings.manage`/`inventory.manage` could therefore upload directly to Supabase Storage with their session and skip the server's magic-byte check and EXIF-stripping re-encode (task 7), within their own hostel's folders, allowed names and declared image types. Alternative: no insert policy at all, and the server uploads with the service role from an allow-listed module after its own permission check (extends `SERVICE_ROLE_ALLOWLIST`, needs approval).
+- Hosted dev: `npm run db:bundle -- --since 20261114130000 --no-seed` once task 4 (`20261114130000`) is applied; otherwise `--since 20261114120000` (both migrations).
+- If the SQL Editor refuses `create policy … on storage.objects` (ownership), tell me; the policies can be created from Storage → Policies with the same expressions.
