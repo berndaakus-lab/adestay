@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-4 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-5 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -493,7 +493,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
 - [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` to be applied on hosted dev
 - [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` to be applied on hosted dev
-- [ ] 5. Reject, waitlist, cancel, extend hold, confirm
+- [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` to be applied on hosted dev
 - [ ] 6. Hold expiry and closing requests when a period ends
 - [ ] 7. Booking lookup RPC (status only)
 - [ ] 8. 20-parallel-approvals test on real Postgres
@@ -533,6 +533,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 4 | `npm test` (unit + db; new pgTAP 022 with 28 assertions) | 407/407 passed |
 | 2026-11-22 | 4 | Mutation checks: (a) permission check removed; (b) capacity check removed; (c) status guard removed; (d) blocked student allowed; (e) hostel hold duration ignored | 022 failed each time, as expected; migration restored |
 | 2026-11-22 | 4 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 4 | **GitHub Actions CI** on `staging` (commit `390607f`) | Passed |
+| 2026-11-22 | 5 | `npm test` (unit + db; new pgTAP 023 with 56 assertions) | 408/408 passed |
+| 2026-11-22 | 5 | Mutation checks: (a) cancel accepts `bookings.review`; (b) reject allowed from submitted; (c) extension limit removed; (d) overdue capacity check removed; (e) overdue hold not restarted; (f) cancel leaves the reservation live | 023 failed each time, as expected; migration restored |
+| 2026-11-22 | 5 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 5 notes
+- Migration `20261122190000_add_booking_staff_decisions.sql`: `start_booking_review`, `reject_booking_request`, `waitlist_booking_request`, `confirm_reservation` and `extend_hold` need `bookings.review`; `cancel_booking_request` needs `bookings.cancel`. Errors: 42501, 22023 invalid input, 55000 wrong state, `AS409` no capacity.
+- Transitions follow BOOKING_AND_PAYMENT_FLOWS §2 exactly: **a submitted request must be opened for review (or waitlisted) before it can be rejected**, so the review screen (task 17) must call `start_booking_review` when a request is opened.
+- Reasons are required for reject, cancel, extend and confirm, and are written to the audit log.
+- An extension adds to the current expiry, up to the hostel's hold duration. An overdue hold restarts from now, and extending or confirming it is refused if its bed has gone to someone else.
+- Staff cancellation covers approved bookings only. Student withdrawal and cancellation come with the portal (Phase 4); refund evaluation with Phase 5a. A student who changes their mind before approval must ask the hostel until then, and **staff can reject that request with a reason**.
 
 ### Task 4 notes
 - Migration `20261122180000_add_approve_booking_request.sql`: `public.approve_booking_request(request_id)`, needs `bookings.review`. Errors: 42501 not allowed (also unknown ids), 55000 wrong state, `AS409` no capacity.
