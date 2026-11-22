@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-7 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-8 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -496,7 +496,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 6. Hold expiry; requests stay with staff when a booking window closes — done locally (2026-11-22); migrations `20261122200000` and `20261122210000` **not yet applied on hosted dev**
 - [x] 7. Booking lookup RPC (status only) — done locally (2026-11-22); migration `20261122220000` **not yet applied on hosted dev**
-- [ ] 8. 20-parallel-approvals test on real Postgres
+- [x] 8. 20-parallel-approvals test on real Postgres — done locally (2026-11-22), run with `npm run test:db:parallel` (not in CI); fix migration `20261122230000` **not yet applied on hosted dev**
 - [ ] 9. Booking email sender
 - [ ] 10. Student code sign-in limits and request submission actions
 - [ ] 11. Rate-limited lookup action
@@ -550,6 +550,20 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 7 | `npm test` (unit + db; new pgTAP 025 with 31 assertions) | 410/410 passed |
 | 2026-11-22 | 7 | Mutation checks: (a) contact not checked; (b) rate limit removed; (c) hostel not checked; (d) prefix altered by look-alike fix; (e) raw IP accepted; (f) callable by signed-in users | 025 failed each time, as expected; migration restored |
 | 2026-11-22 | 7 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 7 | **GitHub Actions CI** on `staging` (commit `e795274`) | Passed |
+| 2026-11-22 | 8 | `npm run test:db:parallel` before the fix (real PostgreSQL 17.12, one connection per caller) | 7 of 8 passed. **Bug found:** of 20 simultaneous copies of one submission, 15 got "too many requests" instead of the original reference |
+| 2026-11-22 | 8 | Same command after migration `20261122230000`, 4 runs | 8/8 passed each time. Includes criterion 2 (20 parallel approvals, 1 bed left, 10 rounds: exactly 1 succeeded, 19 got no capacity) and criterion 3 (20 parallel submits, one reference) |
+| 2026-11-22 | 8 | Mutation checks: (a) room-type lock removed; (b) request lock removed; (c) submission lock removed; (d) expiry waits instead of skipping | 3, 1, 1 and 3 tests failed, as expected; files restored |
+| 2026-11-22 | 8 | Clean `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:bundle`, `npm audit --omit=dev --audit-level=high` | Passed / passed / 0 problems / 410/410 / succeeded / clean / 0 vulnerabilities |
+
+### Task 8 notes
+- `tests/concurrency/booking-races.test.ts` runs every migration on a temporary real PostgreSQL 17 and gives each caller its own connection, with the same role and JWT claims PostgREST uses. It covers last-bed approvals, overlapping periods, one request approved 20 times, parallel double-submit, parallel expiry, `SKIP LOCKED`, confirm against expiry, and mixed staff work with no deadlocks.
+- `embedded-postgres` 17.12.0-beta.19 is a pinned dev-only dependency (approved 2026-11-22). The package line is published only as "beta". It supplies PostgreSQL binaries and is not in the production bundle.
+- On Windows the test starts the server through `pg_ctl`, because `postgres.exe` refuses to run from an administrator account and `pg_ctl` drops to a restricted token.
+- **Run manually:** `npm run test:db:parallel`. CI does not run it, because the workflow is left unchanged (product owner, 2026-11-22).
+- This uses a local PostgreSQL with the Supabase shim, not the hosted project.
+- `npm ci --dry-run` deleted `node_modules` in this worktree during the task. Do not use it; a real `npm ci` restored it and all checks were rerun.
+- The main checkout's `node_modules` still has `next` 16.4.3, older than the 16.4.6 in `package.json`; run `npm ci` there before building or running the app from it.
 
 ### Task 7 notes
 - Migration `20261122220000_add_booking_lookup.sql`: `public.lookup_booking(tenant, reference, contact, client_key)`, service role only, for `src/lib/server/booking-lookup` (task 11). The tenant must come from host resolution, never from the form.

@@ -13,6 +13,7 @@
     "test:e2e": "playwright test",
     "test:e2e:admin": "playwright test --config playwright.admin.config.ts",
     "test:db": "vitest run --project db",
+    "test:db:parallel": "vitest run --config vitest.concurrency.config.ts",
     "db:bundle": "node scripts/bundle-migrations.mjs",
     "check:bundle": "node scripts/check-client-bundle.mjs"
   },
@@ -42,6 +43,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^5.0.5",
+    "embedded-postgres": "17.12.0-beta.19",
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "shadcn": "^4.22.1",
