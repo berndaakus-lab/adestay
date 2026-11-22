@@ -5,7 +5,7 @@ import { getPublicSupabaseEnv } from "@/lib/server/env";
 /**
  * SERVICE ROLE client: bypasses row level security. Restricted by ESLint and by
  * tests/unit/service-role-allowlist.test.ts to the modules listed in SERVICE_ROLE_ALLOWLIST
- * (eslint.config.mjs): payment webhooks, cron jobs, booking lookup and tenant provisioning.
+ * (eslint.config.mjs): payment webhooks, cron jobs, booking lookup, tenant provisioning and public-image uploads.
  * Never import this from request paths that act on behalf of a user.
  */
 let client: SupabaseClient | undefined;

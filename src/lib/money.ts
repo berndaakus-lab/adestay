@@ -25,6 +25,18 @@ export function formatGhs(amount: Pesewas): string {
   return `${negative ? "-" : ""}GH₵ ${cedis}.${pesewas}`;
 }
 
+/**
+ * Parses a typed cedi amount ("1,250.50", "900") to pesewas without floating point.
+ * Returns null for anything else, including more than two decimals.
+ */
+export function parseCedisToPesewas(input: string): number | null {
+  const text = input.trim();
+  if (!/^(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/.test(text)) return null;
+  const [whole, fraction = ""] = text.replaceAll(",", "").split(".");
+  const pesewas = BigInt(whole) * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
+  return pesewas <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(pesewas) : null;
+}
+
 /** Converts a whole-cedi amount (e.g. from a price list) to pesewas. */
 export function cedisToPesewas(cedis: number): number {
   const pesewas = Math.round(cedis * 100);

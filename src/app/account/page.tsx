@@ -6,7 +6,7 @@ import { AuthCard, FormSkeleton } from "@/components/auth/auth-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/server/actions/auth-actions";
-import { requireStaffSession } from "@/lib/server/auth";
+import { acceptPendingInvitations, requireStaffSession } from "@/lib/server/auth";
 import { getMyMemberships, isPlatformAdmin } from "@/lib/server/authz";
 import { getTenantContext } from "@/lib/server/tenant/context";
 
@@ -15,6 +15,7 @@ export const metadata: Metadata = { title: "Choose a workspace" };
 // Landing after staff sign-in: one hostel goes straight to its workspace; otherwise choose.
 async function Account() {
   if ((await getTenantContext()).surface !== "app") notFound();
+  await acceptPendingInvitations();
   const user = await requireStaffSession("/account");
   const [memberships, platformAdmin] = await Promise.all([getMyMemberships(), isPlatformAdmin()]);
   if (memberships.length === 1 && !platformAdmin) redirect(`/t/${memberships[0].slug}`);

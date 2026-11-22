@@ -10,8 +10,8 @@
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
-| 2: Tenant setup & Administration | **In progress** (task breakdown and decisions approved 2026-11-14) | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | Not started | — |
+| 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
+| 3: Public sites & Booking | **In progress: tasks 1-5 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -238,16 +238,16 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` applied on hosted dev (2026-11-14)
 - [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` to be applied on hosted dev
-- [ ] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim
-- [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
-- [ ] 7. Upload pipeline: magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths; polyglot tests
-- [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
-- [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
-- [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
-- [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
-- [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
-- [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
-- [ ] 14. E2E + axe (desktop, 360 px), acceptance review
+- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` to be applied on hosted dev
+- [x] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator — done locally (2026-11-22); no migration
+- [x] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests — done locally (2026-11-22); needs hosted migrations `20261119100000` and `20261122100000`
+- [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
+- [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
+- [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
+- [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
+- [x] 12. Hostel admin UI: profile/branding, settings, staff and permission sets — done locally (2026-11-22); not yet exercised against hosted Supabase
+- [x] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import — done locally (2026-11-22); not yet exercised against hosted Supabase
+- [x] 14. E2E + axe (desktop, 360 px), acceptance review — done locally (2026-11-22); criterion 1 and hosted checks remain open
 
 ### Decisions (product owner, in chat, 2026-11-14: "Approve defaults")
 | Decision | Outcome |
@@ -258,6 +258,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | `sharp` | Approved as a direct dependency (EXIF stripping by re-encoding) |
 | Invites | Supabase `inviteUserByEmail` from the allow-listed provisioning module; membership `invited` → `active` on first sign-in with that email. Needs D-9 for addresses outside the Supabase team |
 | Room photos | Public `tenant-public` bucket (DATABASE_DESIGN §6); private bucket waits for Phase 5a |
+| Upload path (2026-11-22) | **Server-only.** The product owner first chose the user session, then changed to server-only in chat the same day. API roles cannot insert into `tenant-public`; `src/lib/server/uploads/**` is added to `SERVICE_ROLE_ALLOWLIST` |
 | D-9 email provider, D-1 root domain | Still open (Resend or Postmark recommended; D-1 needed for "subdomain live" in acceptance criterion 1) |
 
 ### Test results
@@ -280,6 +281,59 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-14 | 4 | `npm run test:db` (16 files; new pgTAP 012 with 50 assertions; 011 re-run against the refactored `invite_staff_member`) | 16/16 passed |
 | 2026-11-14 | 4 | Mutation checks: (a) "custom domain cannot be under the platform domain" removed; (b) "no platform invite once an active admin exists" removed | (a) 2 assertions failed, (b) 1 failed, as expected; migration restored |
 | 2026-11-14 | 4 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 134/134 passed / 0 problems / passed |
+| 2026-11-14 | 4 | **GitHub Actions CI run 43648925464** on `staging` (commit `b4f0b55`) | Passed |
+| 2026-11-19 | 5 | `npm run test:db` (17 files; new pgTAP 013 with 25 assertions; 001 whitelist adds `can_manage_public_asset`) | 17/17 passed |
+| 2026-11-19 | 5 | Mutation checks: (a) "room type belongs to this hostel" changed from `and` to `or`; (b) server-generated name check removed | (a) 5 assertions failed, (b) 4 failed, as expected; migration restored |
+| 2026-11-19 | 5 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
+| 2026-11-19 | 5 | **GitHub Actions CI run 44637236559** on `staging` (commit `c04fe80`) | Passed |
+| 2026-11-22 | 5 (revised) | `npm run test:db` (pgTAP 013 now 30 assertions: permission check, no direct inserts, service role can write) | 17/17 passed |
+| 2026-11-22 | 5 (revised) | Mutation check: old insert policy left in place | 3 assertions failed, as expected; migration restored |
+| 2026-11-22 | 5 (revised) | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
+| 2026-11-22 | 5 (revised) | **GitHub Actions CI run 44994656670** on `staging` (commit `6967b55`) | Passed |
+| 2026-11-22 | 6 | `npm test` (14 files: new validation and action tests; TS brand-colour rule compared with the SQL function across the colour space) | 209/209 passed |
+| 2026-11-22 | 6 | Mutation checks on `runAction`: (a) permission check removed; (b) session + MFA check removed | 2 tests failed each, as expected; file restored |
+| 2026-11-22 | 6 | PGlite probe: every column the actions write is granted to `authenticated`; update schema with id parses correctly | Passed (probe not kept) |
+| 2026-11-22 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` | 0 problems / passed / succeeded |
+| 2026-11-22 | 6 | `npm audit --omit=dev --audit-level=high` | No high/critical; 1 **moderate** advisory group on `next` 16.0.0-16.4.4 (installed 16.4.3; fix in later 16.4.x) |
+| 2026-11-22 | 6 | PGlite probe: active hostel admin with an **aal1** JWT inserts into `room_types` | **Write succeeded: open security finding, see task 6 notes** |
+| 2026-11-22 | security | `next` and `eslint-config-next` upgraded 16.4.3 → 16.4.6: `npm audit --omit=dev` | 0 vulnerabilities (full `npm audit` still reports 10 moderate, all in dev dependencies; not changed here) |
+| 2026-11-22 | security | After the upgrade: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | passed / passed / 209/209 / succeeded / clean (22 files, 3 checks) / 30/30 |
+| 2026-11-22 | 6 | **GitHub Actions CI run 44995493881** on `staging` (commit `c10dabb`) | Passed |
+| 2026-11-22 | MFA fix | `npm test` (14 Vitest files incl. new pgTAP 014 with 30 assertions; 005 and 012 admin sessions now aal2) | 210/210 passed |
+| 2026-11-22 | MFA fix | Mutation checks: (a) policy always true; (b) check removed from `has_permission` | (a) 16 assertions failed, (b) 11 failed, as expected; migration restored |
+| 2026-11-22 | MFA fix | `npm run lint`, `npm run typecheck`, `CI=1 npx playwright test` | 0 problems / passed / 30/30 passed |
+| 2026-11-22 | MFA fix | Rebased on `next` 16.4.6, then: `npm test`, lint, typecheck, `npm run build` (4 runs), `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 210/210 / 0 problems / passed / 4 of 4 succeeded / clean / 30/30 / 0 vulnerabilities. On 16.4.3, 2 of 4 builds had stopped with a Next.js `SecurityFatalError` upgrade notice |
+| 2026-11-22 | MFA fix | **GitHub Actions CI run 44996918816** on `staging` (commit `7af9d89`) | Passed |
+| 2026-11-22 | 7 | `npm test` (16 files; new image-processing tests with real `sharp` and upload-action tests: SVG, HTML, PDF, GIF, appended and JPEG-comment polyglots, truncated file, > 5 MB, decompression bomb, EXIF/GPS) | 251/251 passed |
+| 2026-11-22 | 7 | Mutation checks: (a) file-type checks removed; (b) metadata kept; (c) database permission check removed | 3, 3 and 2 tests failed, as expected; files restored |
+| 2026-11-22 | 7 | `npm run lint`, `npm run typecheck`, `npm run build` (2 runs), `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / 2 of 2 succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 7 | **GitHub Actions CI run 44997609463** on `staging` (commit `510f10d`) | Passed |
+| 2026-11-22 | 8 | `npm test` (17 files; new provisioning action tests and pgTAP 015 with 8 assertions) | 275/275 passed |
+| 2026-11-22 | 8 | Mutation checks: (a) platform-admin check removed; (b) existing accounts reported differently; (c) invitation RPC returns all staff | 1 test, 1 test and 2 assertions failed, as expected; files restored |
+| 2026-11-22 | 8 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 8 | **GitHub Actions CI run 44998630448** on `staging` (commit `5cd8ba0`) | Passed |
+| 2026-11-22 | 9 | `npm test` (18 files; new CSV parser and action tests; pgTAP 016 with 35 assertions, including a 50-bed import) | 312/312 passed |
+| 2026-11-22 | 9 | Mutation checks: (a) import continues despite row errors; (b) permission check removed; (c) existing-room check removed | (a) and (c) pgTAP 016 aborted on a duplicate-room error; (b) 5 assertions failed; migration restored |
+| 2026-11-22 | 9 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 9 | **GitHub Actions CI run 44999812270** on `staging` (commit `328ce26`) | Passed |
+| 2026-11-22 | 10 | `npm test` (19 files; new domain tests with a mocked Vercel API; pgTAP 017 with 19 assertions) | 346/346 passed |
+| 2026-11-22 | 10 | Mutation checks: (a) any bearer accepted; (b) DNS state ignored; (c) job may change live domains | 2 tests, 1 test and 4 assertions failed, as expected; files restored |
+| 2026-11-22 | 10 | Live production server, `/api/cron/verify-domains`: no header, wrong secret, right secret | 401 / 401 / 200 `skipped: vercel_not_configured` |
+| 2026-11-22 | 10 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 10 | **GitHub Actions CI run 45001158642** on `staging` (commit `dac321f`) | Passed |
+| 2026-11-22 | 11 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: list, wizard, validation, create, resend, activate, domain add, manual status, primary, suspend, restore, bad id | 30/30 flow checks passed; axe WCAG 2.2 AA 0 violations on 12 page states; no horizontal overflow; controls ≥ 44 px; no console errors |
+| 2026-11-22 | 11 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 346/346 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 11 | **GitHub Actions CI run 45003738657** on `staging` (commit `ef82986`) | Passed |
+| 2026-11-22 | 12 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: admin, manager (read-only), front desk (no access), admin without MFA; profile, colours, real image uploads incl. a photo over 4 MB, booking rules, team, permission sets | 60/60 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; controls ≥ 44 px |
+| 2026-11-22 | 12 | Mutation checks: (a) `settings.read` allowed to edit; (b) system-set guard removed | 1 test failed each, as expected; file restored |
+| 2026-11-22 | 12 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 389/389 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 12 | **GitHub Actions CI run 45004987681** on `staging` (commit `40873a9`) | All 3 jobs passed |
+| 2026-11-22 | 13 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: full setup of a 50-bed hostel by hand + CSV, photos, blocks, prices, capacity, search, deletes; admin, manager, read-only, pricing-only and no-permission staff | 76/76 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; no console errors. Task 12 flow re-run: 60/60 |
+| 2026-11-22 | 13 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 402/402 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 13 | **GitHub Actions CI run 45027324277** on `staging` (commit `e75a35d`) | All 3 jobs passed |
+| 2026-11-22 | 14 | pgTAP 018: whole Phase 2 journey on the real schema, RPCs and RLS as API roles (onboard, MFA, 50-bed import, capacity, isolation, suspend, restore) | 32/32 assertions passed |
+| 2026-11-22 | 14 | `npm run test:e2e:admin` (new; run locally, not yet in CI): real production build in Chromium at 1280 px and 360 px against the committed fake API; axe WCAG 2.2 AA on every main screen and dialog | 18/18 passed |
+| 2026-11-22 | 14 | Unit, db, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 380/380, 23/23 (473 pgTAP assertions in files), 0 problems, passed, succeeded, clean, 30/30, 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -317,3 +371,206 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - RBAC unchanged: a platform admin still cannot read a hostel's settings, memberships or audit log without break-glass. **For the platform UI (task 11)** the tenant detail page needs to show whether the first-admin invitation is open/accepted; that needs a narrow read RPC (invitation email + status only), to be added with task 11.
 - Not in this task: hostel admins requesting a custom domain (RBAC §4) — only platform admins add domains in v1 UI; editing tenant name/legal name after creation; archiving/offboarding.
 - Hosted dev: `npm run db:bundle -- --since 20261114120000 --no-seed`.
+
+### Task 5 notes
+- Migration `20261119100000_create_tenant_public_bucket.sql`: bucket `tenant-public` (public, 5 MB `file_size_limit`, `allowed_mime_types` JPEG/PNG/WebP only, so no SVG at the storage layer) and three policies on `storage.objects`, each limited to this bucket: insert, select (listing) and delete through `app.can_manage_public_asset(name)`. No update policy: objects are never overwritten or renamed (new uploads get new names).
+- `app.can_manage_public_asset` accepts only the server-generated shapes `{tenant_id}/branding/<8-64 [a-z0-9-]>.jpg|png|webp` (needs `settings.manage`) and `{tenant_id}/room-types/{room_type_id}/<name>` (needs `inventory.manage` and a room type of that hostel). Traversal, other folders, other extensions and malformed ids are refused before any uuid cast. Suspended hostels, break-glass and anon cannot write. Same path shapes as the `tenant_profiles` and `room_type_photos` constraints.
+- Public files are served by public URL; nobody but managers can **list** the bucket.
+- PGlite shim: minimal `storage.buckets`, `storage.objects` (RLS on, Supabase's default grants) and `storage.foldername`. Real storage behaviour (bucket limits enforced by the Storage API, policies applied to uploads) must be checked on staging once the upload UI exists (task 13).
+- **Upload path (product owner, in chat, 2026-11-22): server-only.** Migration `20261122100000_make_public_uploads_server_only.sql` drops `tenant_public_insert` and adds `public.can_upload_public_asset(name)`. Task 7 must: call that check with the user's session, validate and re-encode the file, then upload with the service role from `src/lib/server/uploads`. Listing and deleting keep their user-session policies. This closes the gap where a staff session could skip the re-encode.
+- Hosted dev: bundle from the last applied migration: `--since 20261119100000` if task 5 is applied, `--since 20261114130000` if only task 4 is, `--since 20261114120000` if neither is.
+- If the SQL Editor refuses `create policy … on storage.objects` (ownership), tell me; the policies can be created from Storage → Policies with the same expressions.
+
+### Task 6 notes
+- `src/lib/server/actions/inventory-actions.ts`: create/update/delete for booking periods, room types, rooms and beds; create/release bed blocks; set/delete prices. Bind the slug in the page (`createRoom.bind(null, tenantSlug)`) for `useActionState`.
+- Every action checks, in order: app host, staff session + MFA (`requireStaffSession`, because layouts do not protect Server Actions), membership, permission, then Zod. `tenant_id` comes from the membership, never the form. Queries use the user's session, so RLS stays the final authority; a row RLS hides is reported as "no longer exists".
+- `setRoomTypePrice` updates, then inserts: a PostgREST upsert would also write `tenant_id` and parent keys, which the column grants refuse.
+- Errors: `src/lib/db-errors.ts` maps Postgres codes to staff messages; raw database text is never shown or logged (code + short reference only).
+- Money is typed in cedis and parsed to pesewas without floats (`parseCedisToPesewas`). Datetimes are read as Africa/Accra (UTC+0).
+- `src/lib/brand-color.ts` is the form rule (criterion 3); `tests/db/brand-color.test.ts` fails if it drifts from `app.brand_color_is_readable`.
+- Room photo rows are not here: they are created with the upload pipeline (task 7). Profile and settings actions come with their UI (task 12).
+- No browser or hosted test yet: the actions have no screens until task 13.
+
+### Open security findings (found 2026-11-22, not fixed unless marked `[x]`)
+- [x] **`next` 16.4.3 had moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed 2026-11-22 by upgrading to 16.4.6 (security fixes landed in 16.4.5). The 16.4.6 docs require no change to `src/proxy.ts` or `next.config.ts`.
+- [x] **Hostel-admin MFA was enforced only in the app (fixed locally 2026-11-22).** Migration `20261122110000_enforce_admin_mfa_in_database.sql` adds `app.caller_meets_mfa_policy()` to `is_tenant_member`, `is_hostel_admin` and `has_permission`: an active hostel admin of an active hostel, or a platform-admin account, holds no staff access in any hostel until aal2. `my_memberships` stays readable at aal1 so the app can route them to MFA; their own resident record is unaffected. **To apply on hosted dev.**
+- [ ] **Not covered by that fix:** ordinary staff who enrolled TOTP voluntarily. The app demands their code, but the database still accepts their aal1 session, within their permission set.
+
+### Task 7 notes
+- `src/lib/server/uploads/process-image.ts`: the type comes from the first bytes (never the name or browser MIME type) and must match what `sharp` decodes; SVG, PDF, GIF and HTML never reach the decoder. Limits: 5 MB, 40 megapixels. Output is always a fresh WebP with orientation applied and all metadata dropped. Maximum side: logo 800 px, room photo 1920 px, main photo 2400 px.
+- `src/lib/server/uploads/public-images.ts`: generates the path, asks `public.can_upload_public_asset` **with the user's session**, processes the file, then stores it with the service role (no overwrite). It is the only upload code that imports the service-role client.
+- `src/lib/server/actions/upload-actions.ts`: add/edit/delete room photos (`inventory.manage`), replace/remove logo and main photo (`settings.manage`). If the database row cannot be saved, the new file is removed; a replaced file is removed only after the new path is saved.
+- `src/lib/server/staff-action.ts`: the shared host + session/MFA + membership + permission guard, now also used by the inventory actions.
+- `sharp` 0.35.5 is a direct, pinned dependency (approved 2026-11-14). `serverActions.bodySizeLimit` is `6mb` (5 MB file + multipart overhead); this setting applies to all Server Actions.
+- **Not verified yet:** real uploads through Supabase Storage and Vercel (no keys here; no screen until task 13).
+- **Known limit to check on staging:** Vercel documents a request-body limit of about 4.5 MB for Functions, so files between roughly 4.5 and 5 MB may be refused by Vercel before our code runs. Task 13 should shrink large photos in the browser before sending, or the product owner can lower the stated limit to 4 MB. The server still re-encodes everything.
+
+### Task 8 notes
+- `src/lib/server/actions/provisioning-actions.ts`. Platform: `createTenant`, `setTenantStatus`, `inviteFirstAdmin`, `resendFirstAdminInvite`. Hostel (`staff.manage`): `inviteStaff`, `resendStaffInvitation`, `changeMemberRole`, `revokeMember`. Every permission decision is made by an RPC with the caller's session; the service role is used only afterwards, to send the email (`src/lib/server/provisioning/invitations.ts`).
+- Migration `20261122120000_add_platform_admin_invitation_status.sql`: `public.platform_hostel_admin_invitations(tenant)`, the narrow read planned in task 4 (hostel-admin rows only, email + status, aal2 platform admin). Needed to show and re-send the first-admin invitation without giving platform admins the staff list.
+- **Accepting:** `/account/continue` and `/account` call `accept_my_invitations` before reading memberships, so a new hostel admin goes straight to MFA setup. A failure does not block sign-in.
+- **New user path:** invitation email → `/auth/callback` (`token_hash`, `type=invite`) → choose a password on `/reset-password` → `/account/continue` → accepted → MFA setup if admin. An expired link falls back to "forgot password", which also works because the invite created the account.
+- **Existing user path:** Supabase sends no invite to a confirmed account; the invitation is accepted at their next visit. The staff message is identical in both cases, so a hostel cannot discover who has an AdeStay account. Such a person gets **no email** until the notification work in Phase 6.
+- If the email fails, the record is kept and the result says so (`emailSent: false`), so the UI can offer Resend.
+- The invite link target comes from the Supabase template and Site URL, not this request's Host header.
+- Until D-1, `createTenant` makes no subdomain row; the hostel is reached through the staging preview.
+- **Product owner, hosted:** set the Invite user template (DEPLOYMENT_AND_OPERATIONS §3a). Until D-9, invitation emails reach only Supabase project team members.
+- **Not verified yet:** a real invitation email and link on staging. Screens come in tasks 11 and 12.
+
+### Task 9 notes
+- **File format (one row per room):** `room_type,room,block,floor,beds`. `room_type`, `room` and `beds` are required; `block` and `floor` may be left out. `room_type` is the type's name or slug and must already exist. `beds` is a number (`4` makes beds A-D) or labels (`Left;Right`). Column order and header case do not matter.
+- `src/lib/validation/inventory-csv.ts`: hand-written strict parser (no dependency, as decided). Handles BOM, CRLF, quotes and blank spreadsheet rows; refuses bad quoting, unknown or repeated columns, wrong column counts, control characters and more than 500 rooms. Files: 200 KB, UTF-8.
+- Migration `20261122130000_add_inventory_import.sql`: `public.import_inventory(tenant, rows, dry_run)` needs `inventory.manage`, validates the whole file, and writes only if every row is valid. **Imports only add:** an existing room number is an error, so re-importing a file changes nothing. Real imports are serialised per hostel and write one summary audit entry (`inventory.imported`) plus the normal row audit.
+- Room, block, floor and bed labels allow letters, digits, spaces and `. _ / -` (must start and end with a letter or digit), which refuses spreadsheet formulas (`=`, `+`, `@`) before they can reach a later export.
+- `src/lib/server/actions/import-actions.ts`: `previewInventoryImport` and `commitInventoryImport`. Both receive the file and revalidate; the import never relies on an earlier preview. At most 50 row errors are returned, with the total count.
+- **Not verified yet:** the import on hosted dev; the screen comes in task 13.
+
+### Task 10 notes
+- `src/lib/server/domains/vercel.ts`: add, verify, read and remove project domains. Endpoints checked against Vercel's REST API docs on 2026-11-22 (`POST /v10/projects/{id}/domains`, `GET` and `DELETE /v9/projects/{id}/domains/{domain}`, `POST .../verify`, `GET /v6/domains/{domain}/config`). **Never called against the real API** (no token here); tests use a mocked API.
+- A domain becomes `verified` only when Vercel confirms ownership **and** DNS is correctly configured. Network, auth, rate-limit and server errors change nothing. A 409 is shown as "used by another project".
+- `src/lib/server/actions/domain-actions.ts`: add, check, set status by hand (only while no token is set), make primary, remove. Removing a custom domain also detaches it from Vercel (T19); if that fails, the admin is told to remove it in Vercel.
+- `/api/cron/verify-domains`: `Authorization: Bearer <CRON_SECRET>` in constant time; refuses everything if the secret is missing or under 16 characters; up to 20 domains per run, oldest check first; returns counts only.
+- Migration `20261122140000_add_domain_check_recording.sql`: `public.record_domain_check`, service role only. It can only move a non-primary custom domain that is pending or failed, so a DNS or API problem cannot take a live site offline.
+- **No `vercel.json` schedule was added** (the product owner manages Vercel). Vercel runs crons on production deployments only, and on Hobby a schedule more frequent than daily fails the deployment. Decision needed: daily on any plan, or every 30 minutes on Pro as SYSTEM_ARCHITECTURE §6 assumes.
+- **Product owner, Vercel:** `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET` (16+ characters). Redeploy after setting them.
+
+### Task 11 notes
+- `/platform`: hostel list (cards on phones, table from 768 px) with "Add a hostel". `/platform/hostels/new`: three-step form on one page (hostel, web address + reference prefix, first admin). `/platform/hostels/{id}`: status with reason dialogs (activate, suspend, restore), onboarding next steps, hostel admin invitations with Resend, web addresses with DNS records, Check now (Vercel connected) or manual status (not connected), make primary, remove.
+- `src/components/forms/form-bits.tsx`: shared `useActionForm`, `FormMessage`, `TextField`, `SelectField` and `ReasonDialog` for tasks 12 and 13.
+- **Found by the browser check and fixed:** React clears a form after its action runs, so typed values were lost on a validation error (`useActionForm` prevents this); the status dialog kept its state across a status change; invalid `dl` markup for DNS records; a logo link whose accessible name did not match its text; Next's validation flagged the auth library's `Date.now()` (`createSupabaseServerClient` now calls `connection()`).
+- The fake API was a local check only and is not committed. It proves the screens and actions work together, **not** real RLS, Auth or email. Task 14 should turn this into a committed E2E setup.
+- **Acceptance criterion 1 (onboard in under 10 minutes on staging) is not yet measured:** it needs the hosted migrations, the Invite user template, D-9 for non-team addresses, and D-1 for "subdomain live".
+
+### Task 12 notes
+- `/t/{slug}/settings`: **Profile** (logo, main photo, details, brand colours with a live contrast check, contact, rules, publish), **Booking rules** (hold, extensions, deposit, check-in threshold, student details), **Team** (invite, resend, change role, remove) and **Permission sets** (built-in sets read-only; create from a template, edit, delete).
+- Access: Profile for anyone with `settings.read`, `settings.manage` or `staff.manage`; Booking rules need `settings.read` or `settings.manage`; Team and Permission sets need `staff.manage` (hostel admins). `settings.read` alone gets read-only forms. Everyone else gets a 404. Every page repeats the session + MFA, membership and permission check.
+- `src/lib/server/actions/settings-actions.ts`: profile, booking rules and custom permission sets. `tenant_id` comes from the membership. `booking_requires_verified_email` is deliberately not editable (D-2), and neither are late fees (Phase 5) or the time zone.
+- **Interpretation to confirm:** `tenant_settings.deposit_value` is stored in pesewas for a fixed deposit and as a whole percentage for a percent deposit. The design names the column without a unit.
+- Images over 4 MB are shrunk in the browser before upload (`src/lib/prepare-image.ts`) because of the Vercel request limit noted in task 7. The server still validates and re-encodes everything.
+- The workspace menu now marks the current section, and Settings is no longer "Soon".
+- Brand colours, logo and main photo are stored but the public site does not display them yet (Phase 3).
+- The fake API was a local check only and is not committed. It does not prove real RLS, Storage, Auth or email. In development Next logs an "instant validation" message on pages that deliberately redirect or return 404; it does not appear as a page error.
+
+### Task 13 notes
+- `/t/{slug}/inventory`: **Capacity** (per period and room type, with setup steps on an empty hostel), **Periods**, **Room types** (with photos and required alt text), **Rooms and beds** (search, filter, 50 per page; room page with beds and date blocks), **Prices** (per period, typed in cedis) and **Import CSV** (template, preview, row errors, confirm).
+- Access: the area opens for `inventory.read`, `inventory.manage` or `pricing.manage`. Rooms and capacity need an inventory permission; editing needs `inventory.manage`; prices need `pricing.manage`; import needs `inventory.manage`. Staff with `pricing.manage` alone land on Prices.
+- `src/components/forms/record-dialog.tsx`: shared add/edit and confirm dialogs. Each opening starts from current values; refusals such as "still in use" show inside the dialog.
+- Blocks are displayed with their real last day (Postgres stores the end as exclusive).
+- **Acceptance criterion 2:** a 50-bed hostel was modelled through the real screens (2 beds by hand, 48 by CSV) and showed the expected 50 beds / 1 out of service / 49 sellable. The capacity arithmetic in that run came from the fake API; the real SQL function is covered by pgTAP 010 and the real import by pgTAP 016. The two have not yet run together on hosted Supabase.
+- **Not verified on hosted Supabase:** PostgREST embedded reads (`rooms` with `beds`, `beds` with `bed_blocks`), real Storage uploads, and RLS through these screens. Task 14 should cover these.
+
+### Task 14 notes
+- `tests/e2e-admin/`: browser tests for platform, settings and inventory, run by `npm run test:e2e:admin`. **Not in CI yet:** GitHub refused the workflow change because this machine's login lacks the `workflow` scope, so the product owner needs to add the CI step (patch kept locally at `supabase/.temp/ci-admin-e2e.patch`). `fake-supabase.mjs` is a local in-memory API with made-up data and needs no secrets. **It does not prove RLS, Auth, Storage or email.**
+- `supabase/tests/database/018_phase2_acceptance.test.sql` covers that gap as far as possible locally: the same journey on the real migrations and RLS. It also confirms a single foreign key for each embedded read used by the room screens.
+- **Found and fixed:** the public site header link had an accessible name that did not match its visible text (WCAG 2.5.3). The public shell had not been scanned in Phase 1.
+
+### Phase 2 acceptance criteria (IMPLEMENTATION_PLAN §2)
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Onboard a tenant end to end in under 10 minutes on staging: subdomain live, admin invited | **Not met yet** | Flow works locally (pgTAP 018, E2E). Never run on staging or timed. Needs hosted migrations, the Invite user template, D-1 (subdomain) and D-9 for addresses outside the Supabase team |
+| 2 | Model 50 beds and see correct sellable capacity per room type × period | **Met locally; hosted check pending** | pgTAP 010, 016, 018 on real SQL; E2E through the screens |
+| 3 | Brand colour rejects contrast below 4.5:1 | **Met** | Database constraint (pgTAP 011, 018), form rule compared with SQL (`tests/db/brand-color.test.ts`), E2E |
+| 4 | Uploads reject non-image, SVG and > 5 MB, and strip EXIF | **Met locally; real Storage pending** | `tests/unit/image-processing.test.ts` with real `sharp`, upload action tests, pgTAP 013, E2E |
+| 5 | Suspended site shows the unavailable page; staff are denied | **Met locally; hosted check pending** | pgTAP 012, 018; E2E on the real page |
+| 6 | Isolation and RBAC tests extended to all new tables; all pass | **Met** (database level) | pgTAP 001, 009-018 as `anon`/`authenticated` with JWT claims; not yet repeated over HTTP against the hosted project |
+
+### Open before Phase 2 sign-off (product owner)
+- [ ] Apply pending migrations on hosted dev (last confirmed: `20261114120000`; latest: `20261122140000`).
+- [ ] Set the Invite user email template (DEPLOYMENT_AND_OPERATIONS §3a).
+- [ ] D-1 root domain and wildcard on Vercel; D-9 email provider.
+- [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (Pro every 30 minutes, or Hobby daily).
+- [x] `deposit_value` units decided 2026-11-22: used only for percent (whole number); a fixed deposit comes from each room price.
+- [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
+- [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
+- [x] CI workflow left unchanged (product owner decision, in chat, 2026-11-22). The admin E2E suite is run manually with `npm run build` then `npm run test:e2e:admin`; CI does not run it.
+
+## Phase 3: Public websites & Booking (started 2026-11-22)
+
+Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 remains not signed off; its open items above still apply.
+
+### Tasks
+- [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
+- [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
+- [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` to be applied on hosted dev
+- [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` to be applied on hosted dev
+- [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` to be applied on hosted dev
+- [ ] 6. Hold expiry and closing requests when a period ends
+- [ ] 7. Booking lookup RPC (status only)
+- [ ] 8. 20-parallel-approvals test on real Postgres
+- [ ] 9. Booking email sender
+- [ ] 10. Student code sign-in limits and request submission actions
+- [ ] 11. Rate-limited lookup action
+- [ ] 12. Staff review actions
+- [ ] 13. Secured hold-expiry job
+- [ ] 14. Branded home, room list and detail, policies and contact pages
+- [ ] 15. Mobile-first booking form and confirmation page
+- [ ] 16. Booking lookup page
+- [ ] 17. Staff review queue and hold timer
+- [ ] 18. E2E, accessibility, performance and acceptance review
+
+### Phase 3 decisions (product owner, in chat, 2026-11-22: "Approve defaults")
+- D-3 holds (120 h, 1 extension, deposit paid = confirmed); D-4 indicator (Limited = 3 or fewer); D-5 no-show (7 days, Phase 4); D-7 refunds (Phase 5a); D-11 no Turnstile for now; D-14 gender off unless the first hostel separates rooms.
+- Staff may mark a hold confirmed with a reason until payments exist (Phase 5a); otherwise every hold expires.
+- Overlapping periods: check capacity by the busiest day. `booking_periods` allows overlaps, so a per-period count could sell one bed twice.
+- Deposit: fixed = the room price's deposit (`room_type_prices.deposit_minor`); percent = whole-number percentage of the price (`tenant_settings.deposit_value`). This closes the Phase 2 open item on `deposit_value` units.
+- Student emails on submitted, approved, rejected, waitlisted and expired, with a staff warning if a send fails.
+- Hold-expiry schedule (every 15 minutes needs Vercel Pro); dev-only `embedded-postgres` and Lighthouse; house rules shown as plain text.
+
+### Test results
+| Date | Task | Command | Result |
+|---|---|---|---|
+| 2026-11-22 | 1 | `npm test` (unit + db; new pgTAP 019 with 53 assertions; 001 updated to 20 tables) | 404/404 passed |
+| 2026-11-22 | 1 | Mutation checks: (a) own-request policy `using (true)`; (b) reservation read allowed to any member; (c) student note kept in audit | 019 failed each time, as expected; migration restored. A first version of (c) changed nothing because the note was still masked by a second rule, so it was redone |
+| 2026-11-22 | 1 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 2 | `npm test` (unit + db; new pgTAP 020 with 41 assertions) | 405/405 passed |
+| 2026-11-22 | 2 | Mutation checks: (a) email verification removed; (b) rate limit removed; (c) period status ignored; (d) retry lookup removed | 020 failed each time, as expected; migration restored |
+| 2026-11-22 | 2 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm run test:e2e:admin` | 0 problems / passed / succeeded / clean / 18/18 |
+| 2026-11-22 | 2 | **GitHub Actions CI** on `staging` (commit `d37da7e`) | Passed |
+| 2026-11-22 | 3 | `npm test` (unit + db; new pgTAP 021 with 32 assertions) | 406/406 passed |
+| 2026-11-22 | 3 | Mutation checks: (a) overlapping bookings summed; (b) overdue holds counted; (c) Limited threshold changed; (d) unpublished room types listed; (e) staff permission removed | 021 failed each time, as expected; migration restored |
+| 2026-11-22 | 3 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 3 | **GitHub Actions CI** on `staging` (commit `292052c`) | Passed |
+| 2026-11-22 | 4 | `npm test` (unit + db; new pgTAP 022 with 28 assertions) | 407/407 passed |
+| 2026-11-22 | 4 | Mutation checks: (a) permission check removed; (b) capacity check removed; (c) status guard removed; (d) blocked student allowed; (e) hostel hold duration ignored | 022 failed each time, as expected; migration restored |
+| 2026-11-22 | 4 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 4 | **GitHub Actions CI** on `staging` (commit `390607f`) | Passed |
+| 2026-11-22 | 5 | `npm test` (unit + db; new pgTAP 023 with 56 assertions) | 408/408 passed |
+| 2026-11-22 | 5 | Mutation checks: (a) cancel accepts `bookings.review`; (b) reject allowed from submitted; (c) extension limit removed; (d) overdue capacity check removed; (e) overdue hold not restarted; (f) cancel leaves the reservation live | 023 failed each time, as expected; migration restored |
+| 2026-11-22 | 5 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 5 notes
+- Migration `20261122190000_add_booking_staff_decisions.sql`: `start_booking_review`, `reject_booking_request`, `waitlist_booking_request`, `confirm_reservation` and `extend_hold` need `bookings.review`; `cancel_booking_request` needs `bookings.cancel`. Errors: 42501, 22023 invalid input, 55000 wrong state, `AS409` no capacity.
+- Transitions follow BOOKING_AND_PAYMENT_FLOWS §2 exactly: **a submitted request must be opened for review (or waitlisted) before it can be rejected**, so the review screen (task 17) must call `start_booking_review` when a request is opened.
+- Reasons are required for reject, cancel, extend and confirm, and are written to the audit log.
+- An extension adds to the current expiry, up to the hostel's hold duration. An overdue hold restarts from now, and extending or confirming it is refused if its bed has gone to someone else.
+- Staff cancellation covers approved bookings only. Student withdrawal and cancellation come with the portal (Phase 4); refund evaluation with Phase 5a. A student who changes their mind before approval must ask the hostel until then, and **staff can reject that request with a reason**.
+
+### Task 4 notes
+- Migration `20261122180000_add_approve_booking_request.sql`: `public.approve_booking_request(request_id)`, needs `bookings.review`. Errors: 42501 not allowed (also unknown ids), 55000 wrong state, `AS409` no capacity.
+- Permission is checked before any lock. Locks: request, then room type (ADR-0003). Availability is read in a later statement, so it sees holds committed by the approval that went first.
+- **Not yet proven:** PGlite has one connection, so these tests run approvals one after another. Acceptance criterion 2 (20 parallel approvals, exactly 1 succeeds) is task 8 on real Postgres.
+- Additions within the design: a blocked student or a period that has ended or is archived cannot be approved.
+- No invoice (Phase 5a) and no email yet (task 9).
+
+### Task 3 notes
+- Migration `20261122170000_add_room_type_availability.sql`. `app.room_type_availability` is the single implementation for the approval RPC (task 4). `public.room_type_availability` gives staff exact figures (inventory or `bookings.read`). `public.room_type_availability_indicators` is public and returns only `available`, `limited` (3 or fewer) or `full`.
+- Reserved beds = the most live reservations on any one day of the period, across all overlapping periods of that room type. Two non-overlapping semesters can share a bed; neither can be sold on top of a full academic year.
+- Live = confirmed, fulfilled, or held and not past `hold_expires_at`. An overdue hold stops counting immediately, so **extending a hold (task 5) must refuse or re-check capacity once it is overdue**.
+- The indicator lists only what a student can request now: published hostel and room type, open period inside its booking window, price set.
+- The Inventory capacity table still shows sellable beds before reservations; task 17 should show reserved and remaining beds using the staff function.
+
+### Task 2 notes
+- Migration `20261122160000_add_submit_booking_request.sql`: `public.submit_booking_request` (signed-in users only), `app.quote_deposit`, `app.generate_booking_reference`. Errors: 42501 not allowed, 22023 invalid choice, 23505 already has a live request, `AS429` too many requests.
+- A retry with the same key returns the original reference, including in a parallel race, and does not use up the limit of 5 per hour. The parallel path is exercised for real only in task 8, because PGlite has one connection.
+- Gender is stored only for hostels that enforce gendered rooms (D-14).
+- Booking rules screen: "Fixed" no longer asks for an amount and points to Inventory, Prices. **A hostel on "Fixed" with a GH₵ 0 deposit on a price quotes no deposit**, so prices must be checked during onboarding.
+- Staff-created walk-in requests (`bookings.create_on_behalf`) are not in this RPC or in the Phase 3 task list.
+
+### Task 1 notes
+- Migration `20261122150000_create_booking_workflow.sql`. API roles can only read these tables; all writes come through RPCs in later tasks.
+- A reservation's foreign key includes the request's room type and period, so a hold cannot differ from its request.
+- Parent keys use NO ACTION instead of RESTRICT: a period, room type or resident with bookings cannot be deleted, but deleting a whole hostel still cascades.
+- `reservations_live_idx` includes `fulfilled` (DATABASE_DESIGN lists held and confirmed) because the capacity rule in BOOKING_AND_PAYMENT_FLOWS §3 counts it. `released` is kept from DATABASE_DESIGN although the state diagram does not use it.
+- `app.redact_for_audit` now masks `student_note` and drops `idempotency_key`.
+- `decision_reason` is readable by the student through their own row, so the review screen (task 17) must say so.
+- Hosted dev: the next bundle is still `npm run db:bundle -- --since 20261114120000 --no-seed` and now includes this migration.

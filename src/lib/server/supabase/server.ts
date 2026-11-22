@@ -1,6 +1,7 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { getPublicSupabaseEnv } from "@/lib/server/env";
 
 /**
@@ -8,7 +9,9 @@ import { getPublicSupabaseEnv } from "@/lib/server/env";
  * security with the user's JWT. This is the default client for Server Components and Actions.
  */
 export async function createSupabaseServerClient() {
-  // Read cookies first: it marks the caller as request-time, so it is never run at build time.
+  // A session client is always request-time. connection() also covers Next's validation pass, which
+  // can supply cookies and would otherwise flag the auth library's Date.now() as prerendered.
+  await connection();
   const cookieStore = await cookies();
   const { url, anonKey } = getPublicSupabaseEnv();
 

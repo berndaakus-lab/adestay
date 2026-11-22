@@ -64,8 +64,8 @@ All are `STABLE`, `SECURITY DEFINER`, `set search_path = ''`, and use `(select a
 |---|---|
 | `app.is_platform_admin()` | the caller is in `platform_admins` **and** the JWT has `aal = 'aal2'` (MFA) |
 | `app.tenant_is_active(tid)` | `tenants.status = 'active'` |
-| `app.is_tenant_member(tid)` | an active `tenant_memberships` row exists for the caller **and** the tenant is active |
-| `app.has_permission(tid, perm text)` | member with role `hostel_admin`, **or** whose permission set contains `perm` |
+| `app.is_tenant_member(tid)` | an active `tenant_memberships` row exists for the caller **and** the tenant is active **and** the session meets the MFA policy (`app.caller_meets_mfa_policy()`: accounts that are hostel or platform admins need aal2) |
+| `app.has_permission(tid, perm text)` | member with role `hostel_admin`, **or** whose permission set contains `perm`, subject to the same MFA policy |
 | `app.my_resident_id(tid)` | returns `residents.id` for the caller in that tenant (or null) |
 | `app.has_break_glass(tid)` | an unexpired, unrevoked `platform_access_grants` row exists for the caller |
 
@@ -313,6 +313,7 @@ Uploads must meet these rules:
 - Size: 5 MB or less.
 - Filenames are generated server-side.
 - Images are re-encoded (EXIF stripped) when processed.
+- `tenant-public` uploads are **server-only** (product owner, 2026-11-22): API roles have no insert policy. The server checks `public.can_upload_public_asset(name)` with the user's session, validates and re-encodes the file, then uploads with the service role from `src/lib/server/uploads`.
 
 ## 7. Backups, export and tenant data retrieval
 - Supabase Pro daily backups; PITR add-on recommended before go-live [D-12].

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/logo";
+import { StaffNavLink } from "@/components/staff/section-nav";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/server/actions/auth-actions";
 import type { StaffNavItem } from "@/lib/staff-nav";
@@ -11,13 +12,11 @@ interface StaffShellProps {
   roleLabel: string;
   userEmail: string | null;
   nav: StaffNavItem[];
-  /** Path of the current section ("" for Overview), for aria-current. */
-  current: string;
   canSwitchHostel: boolean;
   children: ReactNode;
 }
 
-function NavList({ tenantSlug, nav, current }: Pick<StaffShellProps, "tenantSlug" | "nav" | "current">) {
+function NavList({ tenantSlug, nav }: Pick<StaffShellProps, "tenantSlug" | "nav">) {
   const groups = ["Workspace", "Operations"] as const;
   return (
     <>
@@ -41,13 +40,7 @@ function NavList({ tenantSlug, nav, current }: Pick<StaffShellProps, "tenantSlug
                   </li>
                 ) : (
                   <li key={item.path}>
-                    <Link
-                      href={`/t/${tenantSlug}${item.path}`}
-                      aria-current={current === item.path ? "page" : undefined}
-                      className="flex min-h-11 items-center rounded-sm px-3 text-sm text-white hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent aria-[current=page]:font-semibold"
-                    >
-                      {item.label}
-                    </Link>
+                    <StaffNavLink href={`/t/${tenantSlug}${item.path}`} exact={item.path === ""} label={item.label} />
                   </li>
                 ),
               )}
@@ -61,7 +54,7 @@ function NavList({ tenantSlug, nav, current }: Pick<StaffShellProps, "tenantSlug
 
 /** Staff workspace frame (Figma: SideNav + portal top bar). Mobile: navigation in a disclosure. */
 export function StaffShell(props: StaffShellProps) {
-  const { tenantSlug, tenantName, roleLabel, userEmail, nav, current, canSwitchHostel, children } = props;
+  const { tenantSlug, tenantName, roleLabel, userEmail, nav, canSwitchHostel, children } = props;
   return (
     <div className="flex min-h-full flex-1 flex-col md:flex-row">
       <aside className="bg-sidebar text-sidebar-foreground md:w-64 md:shrink-0">
@@ -72,12 +65,12 @@ export function StaffShell(props: StaffShellProps) {
               Menu
             </summary>
             <nav aria-label="Workspace" className="absolute right-4 left-4 z-20 mt-2 rounded-lg bg-sidebar p-3 shadow-lg">
-              <NavList tenantSlug={tenantSlug} nav={nav} current={current} />
+              <NavList tenantSlug={tenantSlug} nav={nav} />
             </nav>
           </details>
         </div>
         <nav aria-label="Workspace" className="hidden px-3 md:block">
-          <NavList tenantSlug={tenantSlug} nav={nav} current={current} />
+          <NavList tenantSlug={tenantSlug} nav={nav} />
         </nav>
       </aside>
 

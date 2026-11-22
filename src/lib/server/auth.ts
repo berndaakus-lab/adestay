@@ -57,6 +57,18 @@ export async function getRequestOrigin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
+/**
+ * Activates open invitations addressed to this user's confirmed email. Call it before the first
+ * getMyMemberships() of the request, so a new hostel admin is sent to MFA straight away. A failure
+ * must not block sign-in: the invitation stays open and is retried on the next visit.
+ */
+export const acceptPendingInvitations = cache(async (): Promise<void> => {
+  if (!(await getSessionUser())) return;
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("accept_my_invitations");
+  if (error) console.error("could not accept invitations", { code: error.code });
+});
+
 /** Staff and platform pages: signed in, and MFA where policy requires it. */
 export async function requireStaffSession(nextPath: string): Promise<SessionUser> {
   const user = await getSessionUser();

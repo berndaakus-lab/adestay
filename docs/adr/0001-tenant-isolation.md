@@ -24,7 +24,7 @@ Option 1.
 2. `ENABLE` + `FORCE ROW LEVEL SECURITY` on every table in `public`; a CI check fails otherwise.
 3. Policies use `app.has_permission(tenant_id, …)` / ownership helpers, never client-supplied tenant ids.
 4. Workflow writes happen only through `SECURITY DEFINER` RPCs that derive `tenant_id` from the target rows.
-5. The service-role client is restricted to an allow-list of modules (webhooks, cron, lookup, provisioning), enforced by a lint rule.
+5. The service-role client is restricted to an allow-list of modules (webhooks, cron, lookup, provisioning, public-image uploads), enforced by a lint rule.
 6. Every new table ships with pgTAP isolation tests (read and write, per role).
 
 ## Consequences

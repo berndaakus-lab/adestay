@@ -18,7 +18,7 @@ The four roles are platform admin, hostel admin, staff and student. Users may be
   - Permissions come from a fixed catalog (RBAC_MATRIX §2), grouped into per-tenant permission sets.
 - **Enforcement:**
   - Server-side `requirePermission()` gives early failure and correct HTTP semantics.
-  - **Database RLS + RPC checks are authoritative.**
+  - **Database RLS + RPC checks are authoritative**, including the MFA requirement for hostel and platform admin accounts (migration `20261122110000`).
 - **No permissions in JWT custom claims for v1.** Helpers query membership tables, which are indexed and cached per statement. Revocation is immediate.
 
 ## Alternatives considered

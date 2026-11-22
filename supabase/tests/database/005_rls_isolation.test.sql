@@ -122,7 +122,7 @@ select tests.as_owner();
 -- ---------------------------------------------------------------------------
 -- Hostel admin of A
 -- ---------------------------------------------------------------------------
-select tests.as_user('00000000-0000-4000-8000-0000000000a1');
+select tests.as_user('00000000-0000-4000-8000-0000000000a1', 'aal2');
 select is((select array_agg(slug::text) from public.tenants), array['hostel-a'], 'admin A: sees only hostel A');
 select is((select array_agg(full_name) from public.residents), array['Ama Mensah'], 'admin A: sees only A residents');
 select is((select count(*)::int from public.tenant_settings), 1, 'admin A: sees A settings only');
@@ -178,7 +178,7 @@ select tests.as_owner();
 -- ---------------------------------------------------------------------------
 -- Hostel admin of B, and of the suspended hostel S
 -- ---------------------------------------------------------------------------
-select tests.as_user('00000000-0000-4000-8000-0000000000b1');
+select tests.as_user('00000000-0000-4000-8000-0000000000b1', 'aal2');
 select is((select array_agg(full_name) from public.residents), array['Yaw Boateng'], 'admin B: sees only B residents');
 select is((select count(*)::int from public.permission_sets), 4, 'admin B: does not see A custom sets');
 select ok(exists (select 1 from public.audit_logs where action = 'platform_access_grants.created'
@@ -188,7 +188,7 @@ select is((select count(*)::int from public.user_profiles where id = '00000000-0
   'admin B: cannot see A staff profiles');
 select tests.as_owner();
 
-select tests.as_user('00000000-0000-4000-8000-0000000000c1');
+select tests.as_user('00000000-0000-4000-8000-0000000000c1', 'aal2');
 select is((select count(*)::int from public.tenants), 0, 'suspended admin: loses access to tenant');
 select is((select count(*)::int from public.residents), 0, 'suspended admin: loses access to residents');
 select tests.as_owner();
