@@ -48,3 +48,14 @@ export const bookingRequestSchema = z.object({
 });
 
 export type BookingRequestInput = z.output<typeof bookingRequestSchema>;
+
+/** Booking lookup. A contact that is neither is still sent, so it gets the same "not found". */
+export const bookingLookupSchema = z.object({
+  reference: z.string("Enter your booking reference").trim().min(1, "Enter your booking reference").max(20, "Check your booking reference"),
+  contact: z
+    .string("Enter the email or phone you booked with")
+    .trim()
+    .min(1, "Enter the email or phone you booked with")
+    .max(254, "Check your email or phone")
+    .transform((value) => (value.includes("@") ? value.toLowerCase() : (normalizePhone(value) ?? value))),
+});

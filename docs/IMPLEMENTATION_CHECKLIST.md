@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-10 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-11 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -499,7 +499,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 8. 20-parallel-approvals test on real Postgres — done locally (2026-11-22), run with `npm run test:db:parallel` (not in CI); fix migration `20261122230000` **not yet applied on hosted dev**
 - [x] 9. Booking email sender — done locally (2026-11-22), provider-neutral; **no email is delivered until D-9 is decided**; migration `20261122240000` **not yet applied on hosted dev**
 - [x] 10. Student code sign-in limits and request submission actions — submission done locally (2026-11-22), no migration; sign-in codes limited by Supabase Auth (product owner decision); **dashboard limits still to be set**
-- [ ] 11. Rate-limited lookup action
+- [x] 11. Rate-limited lookup action — done locally (2026-11-22), no migration; **needs `LOG_REDACTION_SALT` on Vercel** (task 11 notes)
 - [ ] 12. Staff review actions
 - [ ] 13. Secured hold-expiry job
 - [ ] 14. Branded home, room list and detail, policies and contact pages
@@ -563,6 +563,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 10 | `npm test` (new `booking-actions` tests: 32) | 465/465 passed |
 | 2026-11-22 | 10 | Mutation checks: (a) hostel taken from the form; (b) sign-in check removed; (c) retry emails again; (d) suspended hostel allowed; (e) raw database text shown | 1 test failed each time, as expected; file restored |
 | 2026-11-22 | 10 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+| 2026-11-22 | 10 | **GitHub Actions CI** on `staging` (commits `26bb548`, `b4fa046`) | Passed |
+| 2026-11-22 | 11 | `npm test` (new `booking-lookup` tests: 39) | 504/504 passed |
+| 2026-11-22 | 11 | Mutation checks: (a) hostel from the form; (b) hash not keyed; (c) each IPv6 address counted alone; (d) short secret accepted; (e) forwarded header trusted off Vercel; (f) lookup without a client key; (g) found without a status | Tests failed each time, as expected; files restored |
+| 2026-11-22 | 11 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+
+### Task 11 notes
+- `src/lib/server/booking-lookup/` (already on the service-role allow-list) and `src/lib/server/actions/booking-lookup-actions.ts` (`lookupBookingStatus`). The action does not import the service-role client. The hostel comes from `getSiteTenant`.
+- The visitor key is an HMAC-SHA-256 of the IP with `LOG_REDACTION_SALT`. A whole IPv6 /64 counts as one visitor, because one customer usually controls it. `x-forwarded-for` is trusted only on Vercel, which sets it.
+- **Fails closed:** with no secret (16+ characters), or no client address on Vercel, no lookup runs and the page says it is unavailable.
+- [ ] **Product owner, Vercel:** set `LOG_REDACTION_SALT` (server only, different per environment) and redeploy. Booking lookup is unavailable on staging until then.
+- **Not verified on Vercel or hosted Supabase:** the real forwarded header and the real RPC call. Unit tests use mocks; the RPC itself is covered by pgTAP 025.
 
 ### Task 10 notes
 - `src/lib/validation/booking.ts` and `src/lib/server/actions/booking-actions.ts` (`submitBookingRequest`). The hostel comes from `getSiteTenant`, never the form. The RPC runs with the student's session.

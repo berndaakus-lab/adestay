@@ -35,7 +35,7 @@ The **product owner connects the GitHub repo to Vercel personally** and configur
 | `EMAIL_FROM_DOMAIN` | server | no | Sending domain (SPF/DKIM/DMARC configured) |
 | `SMS_PROVIDER_API_KEY`, `SMS_SENDER_ID` | server | **NO** | Phase 6 [D-10] |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | public / server | site key yes / secret NO | Only if D-11 approved |
-| `LOG_REDACTION_SALT` | server | **NO** | Salt for IP hashing in audit logs |
+| `LOG_REDACTION_SALT` | server | **NO** | Secret (16+ characters) for hashing IP addresses in the booking lookup rate limit and audit logs. **Booking lookup is unavailable until it is set.** Use a different value per environment |
 | `SENTRY_DSN` (optional) | all | yes | Error monitoring, if approved [D-17] |
 
 **Per-tenant payment secrets are not environment variables.** They are stored in Supabase Vault (`private.tenant_payment_configs.secret_ref`). If D-6/D-8 chooses a platform-level merchant account instead, `PAYSTACK_SECRET_KEY` / `HUBTEL_CLIENT_SECRET` become server-only env vars.
