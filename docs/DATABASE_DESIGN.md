@@ -313,6 +313,7 @@ Uploads must meet these rules:
 - Size: 5 MB or less.
 - Filenames are generated server-side.
 - Images are re-encoded (EXIF stripped) when processed.
+- `tenant-public` uploads are **server-only** (product owner, 2026-11-22): API roles have no insert policy. The server checks `public.can_upload_public_asset(name)` with the user's session, validates and re-encodes the file, then uploads with the service role from `src/lib/server/uploads`.
 
 ## 7. Backups, export and tenant data retrieval
 - Supabase Pro daily backups; PITR add-on recommended before go-live [D-12].

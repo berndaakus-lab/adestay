@@ -13,6 +13,7 @@ export const SERVICE_ROLE_ALLOWLIST = [
   "src/app/api/cron/**",
   "src/lib/server/booking-lookup/**",
   "src/lib/server/provisioning/**",
+  "src/lib/server/uploads/**",
 ];
 
 const serviceRoleMessage =

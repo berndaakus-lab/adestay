@@ -1,8 +1,9 @@
 -- Phase 2, task 5. tenant-public bucket and storage RLS (docs/DATABASE_DESIGN.md §6,
 -- SECURITY_THREAT_MODEL T1/T11; Phase 2 acceptance criteria 4 and 6, database part).
--- Storage requests reach storage.objects with the caller's role and JWT, as simulated here.
+-- Uploads are server-only (20261122100000): can_upload_public_asset is the user-session check the
+-- server makes first; direct inserts by API roles are refused; the service role performs the write.
 begin;
-select plan(25);
+select plan(30);
 
 create schema tests;
 grant usage on schema tests to anon, authenticated;
@@ -74,9 +75,11 @@ insert into public.room_types (id, tenant_id, name, slug, occupancy) values
   ('20000000-0000-4000-8000-0000000000a1', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'A Double', 'double', 2),
   ('20000000-0000-4000-8000-0000000000b1', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'B Double', 'double', 2);
 
--- B already has a logo.
+-- Objects already uploaded by the server.
 insert into storage.objects (bucket_id, name) values
-  ('tenant-public', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/branding/logo-b0000001.png');
+  ('tenant-public', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/branding/logo-b0000001.png'),
+  ('tenant-public', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000001.webp'),
+  ('tenant-public', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000001.jpg');
 
 -- ---------------------------------------------------------------------------------------------
 -- Bucket configuration (criterion 4: size and type limits at the storage layer)
@@ -90,26 +93,16 @@ select is((select allowed_mime_types from storage.buckets where id = 'tenant-pub
 -- Hostel admin of A
 -- ---------------------------------------------------------------------------------------------
 select tests.as_user('00000000-0000-4000-8000-0000000000a1', 'aal2');
-select lives_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000001.webp')$$,
-  'admin A: uploads a logo to A''s branding folder');
-select lives_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000001.jpg')$$,
-  'admin A: uploads a photo for an A room type');
-select throws_ok($$select tests.put('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/branding/logo-a0000002.png')$$,
-  '42501', null, 'admin A: cannot upload into hostel B''s folder');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000b1/photo-a0000002.jpg')$$,
-  '42501', null, 'admin A: cannot file a photo under hostel B''s room type');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000ff/photo-a0000003.jpg')$$,
-  '42501', null, 'admin A: cannot upload for a room type that does not exist');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000004.svg')$$,
-  '42501', null, 'SVG names are refused');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/Logo.PNG')$$,
-  '42501', null, 'names that are not server-generated are refused');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/../../bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/x-a0000005.png')$$,
-  '42501', null, 'path traversal is refused');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/payments/receipt-a0000006.png')$$,
-  '42501', null, 'other folders (e.g. payment evidence) are refused in the public bucket');
-select throws_ok($$select tests.put('not-a-uuid-not-a-uuid-not-a-uuid-xxxx/branding/logo-a0000007.png')$$,
-  '42501', null, 'a malformed tenant folder is refused (no cast error)');
+select ok(public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000001.webp'), 'admin A: uploads a logo to A''s branding folder');
+select ok(public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000001.jpg'), 'admin A: uploads a photo for an A room type');
+select ok(not public.can_upload_public_asset('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/branding/logo-a0000002.png'), 'admin A: cannot upload into hostel B''s folder');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000b1/photo-a0000002.jpg'), 'admin A: cannot file a photo under hostel B''s room type');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000ff/photo-a0000003.jpg'), 'admin A: cannot upload for a room type that does not exist');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000004.svg'), 'SVG names are refused');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/Logo.PNG'), 'names that are not server-generated are refused');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/../../bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/x-a0000005.png'), 'path traversal is refused');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/payments/receipt-a0000006.png'), 'other folders (e.g. payment evidence) are refused in the public bucket');
+select ok(not public.can_upload_public_asset('not-a-uuid-not-a-uuid-not-a-uuid-xxxx/branding/logo-a0000007.png'), 'a malformed tenant folder is refused (no cast error)');
 with u as (update storage.objects set name = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000008.webp'
             where name = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000001.webp' returning 1)
 select is((select count(*)::int from u), 0, 'objects cannot be renamed or overwritten (no update policy)');
@@ -124,15 +117,12 @@ select tests.as_owner();
 -- Staff of A: permission decides the folder
 -- ---------------------------------------------------------------------------------------------
 select tests.as_user('00000000-0000-4000-8000-0000000000a4');
-select lives_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000009.webp')$$,
-  'manager (inventory.manage): uploads room photos');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000010.png')$$,
-  '42501', null, 'manager (no settings.manage): cannot change branding');
+select ok(public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000009.webp'), 'manager (inventory.manage): uploads room photos');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-a0000010.png'), 'manager (no settings.manage): cannot change branding');
 select tests.as_owner();
 
 select tests.as_user('00000000-0000-4000-8000-0000000000a2');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000011.webp')$$,
-  '42501', null, 'front desk (inventory.read only): cannot upload');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-a0000011.webp'), 'front desk (inventory.read only): cannot upload');
 select is((select count(*)::int from storage.objects), 0, 'front desk: cannot list the bucket');
 select tests.as_owner();
 
@@ -140,13 +130,11 @@ select tests.as_owner();
 -- Everyone else
 -- ---------------------------------------------------------------------------------------------
 select tests.as_user('00000000-0000-4000-8000-0000000000c1', 'aal2');
-select throws_ok($$select tests.put('cccccccc-cccc-4ccc-8ccc-cccccccccccc/branding/logo-c0000001.png')$$,
-  '42501', null, 'admin of a suspended hostel: cannot upload');
+select ok(not public.can_upload_public_asset('cccccccc-cccc-4ccc-8ccc-cccccccccccc/branding/logo-c0000001.png'), 'admin of a suspended hostel: cannot upload');
 select tests.as_owner();
 
 select tests.as_user('00000000-0000-4000-8000-0000000000e1', 'aal2');
-select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-e0000001.png')$$,
-  '42501', null, 'platform admin with break-glass: cannot upload (read-only)');
+select ok(not public.can_upload_public_asset('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-e0000001.png'), 'platform admin with break-glass: cannot upload (read-only)');
 select tests.as_owner();
 
 select tests.as_anon();
@@ -156,6 +144,29 @@ select is((select count(*)::int from storage.objects), 0, 'anon: cannot list obj
 select tests.as_owner();
 
 select is((select count(*)::int from storage.objects where name like 'bbbbbbbb%'), 1, 'B''s logo is untouched');
+
+-- ---------------------------------------------------------------------------------------------
+-- Server-only uploads
+-- ---------------------------------------------------------------------------------------------
+select is((select count(*)::int from pg_policies where schemaname = 'storage' and tablename = 'objects' and cmd = 'INSERT'), 0,
+  'no API role has an insert policy on storage.objects');
+select ok(not has_function_privilege('anon', 'public.can_upload_public_asset(text)', 'execute'), 'anon: cannot call the upload check');
+
+select tests.as_user('00000000-0000-4000-8000-0000000000a1', 'aal2');
+select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-d0000001.webp')$$,
+  '42501', null, 'admin A: cannot upload directly with their session');
+select tests.as_owner();
+
+select tests.as_user('00000000-0000-4000-8000-0000000000a4');
+select throws_ok($$select tests.put('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/room-types/20000000-0000-4000-8000-0000000000a1/photo-d0000002.webp')$$,
+  '42501', null, 'manager: cannot upload directly with their session');
+select tests.as_owner();
+
+set local role service_role;
+select lives_ok($$insert into storage.objects (bucket_id, name) values
+  ('tenant-public', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/branding/logo-d0000003.webp')$$,
+  'the server (service role) can upload after its checks');
+reset role;
 
 select * from finish();
 rollback;

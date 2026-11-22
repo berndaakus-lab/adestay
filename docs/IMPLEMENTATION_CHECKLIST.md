@@ -238,9 +238,9 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` applied on hosted dev (2026-11-14)
 - [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` to be applied on hosted dev
-- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migration `20261119100000` to be applied on hosted dev
+- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` to be applied on hosted dev
 - [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
-- [ ] 7. Upload pipeline: magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths; polyglot tests
+- [ ] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests
 - [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
 - [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
 - [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
@@ -258,7 +258,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | `sharp` | Approved as a direct dependency (EXIF stripping by re-encoding) |
 | Invites | Supabase `inviteUserByEmail` from the allow-listed provisioning module; membership `invited` → `active` on first sign-in with that email. Needs D-9 for addresses outside the Supabase team |
 | Room photos | Public `tenant-public` bucket (DATABASE_DESIGN §6); private bucket waits for Phase 5a |
-| Upload path (2026-11-22) | Staff member's own session + storage RLS; direct uploads that skip the server re-encode are an accepted risk, limited to the hostel's own folders, allowed names and declared image types |
+| Upload path (2026-11-22) | **Server-only.** The product owner first chose the user session, then changed to server-only in chat the same day. API roles cannot insert into `tenant-public`; `src/lib/server/uploads/**` is added to `SERVICE_ROLE_ALLOWLIST` |
 | D-9 email provider, D-1 root domain | Still open (Resend or Postmark recommended; D-1 needed for "subdomain live" in acceptance criterion 1) |
 
 ### Test results
@@ -286,6 +286,9 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-19 | 5 | Mutation checks: (a) "room type belongs to this hostel" changed from `and` to `or`; (b) server-generated name check removed | (a) 5 assertions failed, (b) 4 failed, as expected; migration restored |
 | 2026-11-19 | 5 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
 | 2026-11-19 | 5 | **GitHub Actions CI run 44637236559** on `staging` (commit `c04fe80`) | Passed |
+| 2026-11-22 | 5 (revised) | `npm run test:db` (pgTAP 013 now 30 assertions: permission check, no direct inserts, service role can write) | 17/17 passed |
+| 2026-11-22 | 5 (revised) | Mutation check: old insert policy left in place | 3 assertions failed, as expected; migration restored |
+| 2026-11-22 | 5 (revised) | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -329,6 +332,6 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - `app.can_manage_public_asset` accepts only the server-generated shapes `{tenant_id}/branding/<8-64 [a-z0-9-]>.jpg|png|webp` (needs `settings.manage`) and `{tenant_id}/room-types/{room_type_id}/<name>` (needs `inventory.manage` and a room type of that hostel). Traversal, other folders, other extensions and malformed ids are refused before any uuid cast. Suspended hostels, break-glass and anon cannot write. Same path shapes as the `tenant_profiles` and `room_type_photos` constraints.
 - Public files are served by public URL; nobody but managers can **list** the bucket.
 - PGlite shim: minimal `storage.buckets`, `storage.objects` (RLS on, Supabase's default grants) and `storage.foldername`. Real storage behaviour (bucket limits enforced by the Storage API, policies applied to uploads) must be checked on staging once the upload UI exists (task 13).
-- **Upload path decided by the product owner (in chat, 2026-11-22): keep the user session.** Uploads use the staff member's own session (architecture: user JWT + RLS; no new service-role use). **Accepted residual risk:** a staff member with `settings.manage`/`inventory.manage` could therefore upload directly to Supabase Storage with their session and skip the server's magic-byte check and EXIF-stripping re-encode (task 7), within their own hostel's folders, allowed names and declared image types. The server-only alternative (service-role upload from an allow-listed module) was considered and not chosen.
-- Hosted dev: `npm run db:bundle -- --since 20261114130000 --no-seed` once task 4 (`20261114130000`) is applied; otherwise `--since 20261114120000` (both migrations).
+- **Upload path (product owner, in chat, 2026-11-22): server-only.** Migration `20261122100000_make_public_uploads_server_only.sql` drops `tenant_public_insert` and adds `public.can_upload_public_asset(name)`. Task 7 must: call that check with the user's session, validate and re-encode the file, then upload with the service role from `src/lib/server/uploads`. Listing and deleting keep their user-session policies. This closes the gap where a staff session could skip the re-encode.
+- Hosted dev: bundle from the last applied migration: `--since 20261119100000` if task 5 is applied, `--since 20261114130000` if only task 4 is, `--since 20261114120000` if neither is.
 - If the SQL Editor refuses `create policy … on storage.objects` (ownership), tell me; the policies can be created from Storage → Policies with the same expressions.
