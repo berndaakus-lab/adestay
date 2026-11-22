@@ -5,10 +5,8 @@ import { revalidatePath } from "next/cache";
 import type { z } from "zod";
 import { dbErrorMessage, type DbError, type DbErrorMessages } from "@/lib/db-errors";
 import type { Permission } from "@/lib/permissions";
-import { requireStaffSession } from "@/lib/server/auth";
-import { AuthorizationError, requirePermission, requireTenantMember } from "@/lib/server/authz";
+import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
-import { getTenantContext } from "@/lib/server/tenant/context";
 import { fieldErrors } from "@/lib/validation/auth";
 import {
   bedBlockSchema,
@@ -53,20 +51,9 @@ async function runAction<S extends z.ZodType>(
   success: string,
   messages?: DbErrorMessages,
 ): Promise<InventoryFormState> {
-  if (!/^[a-z0-9-]{3,40}$/.test(tenantSlug)) return { status: "error", message: NO_PERMISSION };
-  if ((await getTenantContext()).surface !== "app") return { status: "error", message: NO_PERMISSION };
-  // Redirects to sign-in or MFA when needed; the redirect must propagate, so it is not caught.
-  await requireStaffSession(`/t/${tenantSlug}`);
-
-  let tenantId: string;
-  try {
-    const access = await requireTenantMember(tenantSlug);
-    requirePermission(access, permission, "action");
-    tenantId = access.tenantId;
-  } catch (error) {
-    if (error instanceof AuthorizationError) return { status: "error", message: NO_PERMISSION };
-    throw error;
-  }
+  const access = await authorizeStaffAction(tenantSlug, permission);
+  if (!access) return { status: "error", message: NO_PERMISSION };
+  const tenantId = access.tenantId;
 
   const parsed = schema.safeParse(Object.fromEntries(formData.entries()));
   if (!parsed.success) return { status: "error", fieldErrors: fieldErrors(parsed.error) };

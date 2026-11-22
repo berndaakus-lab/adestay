@@ -181,3 +181,16 @@ export const roomTypePriceSchema = z
   .refine((v) => v.amount > 0, { message: "The price must be more than zero", path: ["amount"] })
   .refine((v) => v.amount <= MAX_PRICE_PESEWAS, { message: "The price cannot be over GH₵ 1,000,000", path: ["amount"] })
   .refine((v) => v.deposit <= v.amount, { message: "The deposit cannot be more than the price", path: ["deposit"] });
+
+// ---------------------------------------------------------------------------------------------
+// Room photos and branding images (the file itself is validated by src/lib/server/uploads)
+// ---------------------------------------------------------------------------------------------
+const altText = z.string().trim().min(3, "Describe the photo for screen readers").max(200, "Description is too long");
+
+export const roomTypePhotoSchema = z.object({ roomTypeId: z.uuid("Choose a room type"), altText });
+export const roomTypePhotoUpdateSchema = z.object({
+  id: z.uuid("Choose a valid record"),
+  altText,
+  sortOrder: wholeNumber(0, 10000, "Display order").default(0),
+});
+export const brandingImageSchema = z.object({ kind: z.enum(["logo", "hero"], "Choose logo or main photo") });
