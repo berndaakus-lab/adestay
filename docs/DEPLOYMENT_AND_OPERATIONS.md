@@ -62,6 +62,8 @@ Set by the product owner in Supabase Dashboard → Authentication. Values for th
 | Magic Link email template | Emails → Templates → Magic Link | Must show the code: include `{{ .Token }}` (students type the 6-digit code) |
 | Invite user email template | Emails → Templates → Invite user | Link must be `<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/reset-password">Accept your invitation</a>`. The default link does not work with the server callback. Site URL must be the staff app host. |
 | SMTP | Emails → SMTP | Custom provider required before real students sign in (D-9). Built-in email only reaches project team members. |
+| Minimum time between codes | Sign In / Providers → Email | 60 seconds per address |
+| Email sending rate limit | Rate Limits | After custom SMTP (D-9): start at 100 emails per hour for the project, and raise it before admission peaks if real students are being refused. This cap covers all Auth email, including staff invitations and password resets |
 | Leaked-password protection | Passwords | On, when the plan supports it |
 
 Vercel: no extra variables are needed for the staging host (the app reads Vercel's runtime hostnames). Set `NEXT_PUBLIC_APP_HOST` once the root domain exists (e.g. `app.<domain>`).

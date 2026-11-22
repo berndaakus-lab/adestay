@@ -29,7 +29,7 @@
 | T3 | **IDOR** | `/portal/invoices/<uuid>` for another student | RLS-scoped fetches; UUIDs plus unguessable references; 404 on not-found/not-allowed; booking lookup requires reference **and** matching email/phone | E2E tests with swapped IDs |
 | T4 | **Authentication/session weaknesses** | Credential stuffing, session theft | Supabase Auth with `@supabase/ssr` httpOnly, Secure, SameSite=Lax cookies; MFA (TOTP) required for hostel admins and platform admins; leaked-password protection and minimum length; short JWT expiry (1 h) with refresh rotation; sign-out revokes the refresh token; OTP rate limits | Config review checklist; tests for MFA enforcement on admin routes |
 | T5 | **Privilege escalation** | Staff edits own permission set; user inserts into `tenant_memberships` | No direct write policies on memberships/permission sets; RPCs block self-change and granting permissions the caller lacks; `platform_admins` writable only via migration/CLI | pgTAP negative tests |
-| T6 | **Public endpoint abuse** | Spam booking requests, enumerating references, OTP flooding | Verified email before submit; per-IP and per-email rate limits (`app.check_rate_limit`); optional Turnstile [D-11]; references of 30 bits of entropy plus a lookup that needs email/phone, rate-limited to 5 per 15 min per IP; uniform error responses | Load/abuse tests in Phase 7 |
+| T6 | **Public endpoint abuse** | Spam booking requests, enumerating references, OTP flooding | Verified email before submit; rate limits (`app.check_rate_limit` for submissions and lookup, Supabase Auth for sign-in codes); optional Turnstile [D-11]; references of 30 bits of entropy plus a lookup that needs email/phone, rate-limited to 5 per 15 min per IP; uniform error responses | Load/abuse tests in Phase 7 |
 | T7 | **SQL injection** | Unsafe string building in RPCs or reports | supabase-js parameterised queries; no dynamic SQL in RPCs except `format()` with `%I/%L`; Zod validation; `search_path = ''` on SECURITY DEFINER functions | Lint/grep CI check for `execute` without `format`; code review |
 | T8 | **XSS** | Malicious hostel "about" text or maintenance description | React escaping; Markdown rendered with a sanitiser and an allow-list (no raw HTML); strict CSP (nonce-based scripts, `frame-ancestors 'none'`); brand colours validated as hex | CSP report-only in Phase 1, enforce by Phase 7; XSS payload tests |
 | T9 | **CSRF** | Cross-site form posts to Server Actions | Next.js Server Actions check Origin against Host; SameSite=Lax cookies; route handlers that mutate require POST + origin check; webhooks are exempt but signature-verified | Tests with foreign Origin |
@@ -63,7 +63,7 @@
 
 | Action | Limit |
 |---|---|
-| OTP send | 5 / hour / email |
+| OTP send | Supabase Auth limits (product owner, 2026-11-22): 60 s minimum between codes per address, plus a project-wide hourly email cap (DEPLOYMENT_AND_OPERATIONS §3a). An app-level counter was rejected because the public anon key can call Supabase Auth directly and skip it |
 | Booking submit | 5 / hour / user |
 | Lookup | 5 / 15 min / IP |
 | Login | handled by Supabase |
