@@ -242,7 +242,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator — done locally (2026-11-22); no migration
 - [x] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests — done locally (2026-11-22); needs hosted migrations `20261119100000` and `20261122100000`
 - [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
-- [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
+- [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
 - [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
 - [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
 - [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
@@ -311,6 +311,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 8 | `npm test` (17 files; new provisioning action tests and pgTAP 015 with 8 assertions) | 275/275 passed |
 | 2026-11-22 | 8 | Mutation checks: (a) platform-admin check removed; (b) existing accounts reported differently; (c) invitation RPC returns all staff | 1 test, 1 test and 2 assertions failed, as expected; files restored |
 | 2026-11-22 | 8 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 8 | **GitHub Actions CI run 44998630448** on `staging` (commit `5cd8ba0`) | Passed |
+| 2026-11-22 | 9 | `npm test` (18 files; new CSV parser and action tests; pgTAP 016 with 35 assertions, including a 50-bed import) | 312/312 passed |
+| 2026-11-22 | 9 | Mutation checks: (a) import continues despite row errors; (b) permission check removed; (c) existing-room check removed | (a) and (c) pgTAP 016 aborted on a duplicate-room error; (b) 5 assertions failed; migration restored |
+| 2026-11-22 | 9 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -393,3 +397,11 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Until D-1, `createTenant` makes no subdomain row; the hostel is reached through the staging preview.
 - **Product owner, hosted:** set the Invite user template (DEPLOYMENT_AND_OPERATIONS §3a). Until D-9, invitation emails reach only Supabase project team members.
 - **Not verified yet:** a real invitation email and link on staging. Screens come in tasks 11 and 12.
+
+### Task 9 notes
+- **File format (one row per room):** `room_type,room,block,floor,beds`. `room_type`, `room` and `beds` are required; `block` and `floor` may be left out. `room_type` is the type's name or slug and must already exist. `beds` is a number (`4` makes beds A-D) or labels (`Left;Right`). Column order and header case do not matter.
+- `src/lib/validation/inventory-csv.ts`: hand-written strict parser (no dependency, as decided). Handles BOM, CRLF, quotes and blank spreadsheet rows; refuses bad quoting, unknown or repeated columns, wrong column counts, control characters and more than 500 rooms. Files: 200 KB, UTF-8.
+- Migration `20261122130000_add_inventory_import.sql`: `public.import_inventory(tenant, rows, dry_run)` needs `inventory.manage`, validates the whole file, and writes only if every row is valid. **Imports only add:** an existing room number is an error, so re-importing a file changes nothing. Real imports are serialised per hostel and write one summary audit entry (`inventory.imported`) plus the normal row audit.
+- Room, block, floor and bed labels allow letters, digits, spaces and `. _ / -` (must start and end with a letter or digit), which refuses spreadsheet formulas (`=`, `+`, `@`) before they can reach a later export.
+- `src/lib/server/actions/import-actions.ts`: `previewInventoryImport` and `commitInventoryImport`. Both receive the file and revalidate; the import never relies on an earlier preview. At most 50 row errors are returned, with the total count.
+- **Not verified yet:** the import on hosted dev; the screen comes in task 13.
