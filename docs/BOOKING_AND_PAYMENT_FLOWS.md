@@ -50,13 +50,10 @@ stateDiagram-v2
   submitted --> withdrawn: student
   under_review --> withdrawn: student
   waitlisted --> withdrawn: student
-  submitted --> expired: period booking closes
-  waitlisted --> expired: period booking closes
   approved --> cancelled: student/hostel cancels
   approved --> lapsed: reservation hold expired
   rejected --> [*]
   withdrawn --> [*]
-  expired --> [*]
   cancelled --> [*]
   lapsed --> [*]
 ```
@@ -70,7 +67,8 @@ stateDiagram-v2
 | → withdrawn | Owner | Not yet approved | — |
 | → cancelled | Owner (per policy) or `bookings.cancel` | Reason required | Reservation `cancelled`, allocation `cancelled`, refund evaluation (§5.9) |
 | → lapsed | System (cron) | Reservation expired | Allocation cancelled, unpaid invoice voided |
-| → expired | System | Period `booking_closes_at` passed | Notification |
+
+**Booking window closing (product owner, 2026-11-22):** requests are not expired automatically when `booking_closes_at` passes. Closing the window stops new submissions; unreviewed and waitlisted requests stay in the staff queue until staff approve, waitlist or reject them. The `expired` value remains allowed in the status column but no workflow sets it.
 
 ### 2.2 Reservation (inventory hold) status
 

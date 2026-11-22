@@ -1,7 +1,7 @@
 -- Phase 3, task 6. Hold and request expiry with a controlled clock (Phase 3 acceptance criterion 4,
 -- database part). Parallel runs and SKIP LOCKED need real Postgres (task 8).
 begin;
-select plan(34);
+select plan(33);
 
 create schema tests;
 grant usage on schema tests to anon, authenticated, service_role;
@@ -125,15 +125,14 @@ create temp table run1 as select * from public.expire_reservations();
 
 select is((select expired_reservations from run1), 1, 'one overdue hold expired');
 select is((select lapsed_request_ids from run1), array['70000000-0000-4000-8000-000000000001'::uuid], 'its request id is returned for the email');
-select is((select closed_requests from run1), 2, 'two requests closed with the booking window');
 select is(tests.reservation_status(1), 'expired', 'the reservation is expired');
 select ok((select ended_at is not null and end_reason = 'Hold expired' from public.reservations where id = '90000000-0000-4000-8000-000000000001'), 'the end time and reason are stored');
 select is(tests.request_status(1), 'lapsed', 'the request has lapsed');
 select is(tests.reservation_status(2), 'held', 'a hold with time left is untouched');
 select is(tests.reservation_status(3), 'confirmed', 'a confirmed reservation never expires');
 select is(tests.reservation_status(5), 'held', 'a suspended hostel''s hold is left alone');
-select is(tests.request_status(6), 'expired', 'a submitted request expires when the window closes');
-select is(tests.request_status(7), 'expired', 'a waitlisted request expires when the window closes');
+select is(tests.request_status(6), 'submitted', 'an unreviewed request stays with staff after the window closes');
+select is(tests.request_status(7), 'waitlisted', 'a waitlisted request stays with staff after the window closes');
 select is(tests.request_status(8), 'under_review', 'a request under review stays with staff');
 select is(tests.request_status(9), 'approved', 'an approved request is not closed by the window');
 select is(tests.request_status(10), 'submitted', 'a window still open closes nothing');
@@ -141,10 +140,10 @@ select is(tests.request_status(11), 'submitted', 'a period with no closing time 
 select is(tests.request_status(12), 'submitted', 'a suspended hostel''s request is left alone');
 
 select is((select actor_type from public.audit_logs where action = 'reservation.expired' and entity_id = '90000000-0000-4000-8000-000000000001'), 'cron', 'hold expiry is audited as the job');
-select is((select count(*)::int from public.audit_logs where action = 'booking.expired' and actor_type = 'cron'), 2, 'closed requests are audited');
+select is((select count(*)::int from public.audit_logs where action = 'booking.expired'), 0, 'the job closes no requests');
 
 set local role service_role;
-select is((select expired_reservations + closed_requests from public.expire_reservations()), 0, 'running again changes nothing');
+select is((select expired_reservations from public.expire_reservations()), 0, 'running again changes nothing');
 reset role;
 
 -- ---------------------------------------------------------------------------------------------

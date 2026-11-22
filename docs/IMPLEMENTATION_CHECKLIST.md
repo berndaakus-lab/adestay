@@ -494,7 +494,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` applied on hosted dev (confirmed 2026-11-22)
-- [x] 6. Hold expiry and closing requests when a period's booking window ends — done locally (2026-11-22); migration `20261122200000` **not yet applied on hosted dev** (wait for the product owner's answer in task 6 notes)
+- [x] 6. Hold expiry; requests stay with staff when a booking window closes — done locally (2026-11-22); migrations `20261122200000` and `20261122210000` **not yet applied on hosted dev**
 - [ ] 7. Booking lookup RPC (status only)
 - [ ] 8. 20-parallel-approvals test on real Postgres
 - [ ] 9. Booking email sender
@@ -514,6 +514,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - Overlapping periods: check capacity by the busiest day. `booking_periods` allows overlaps, so a per-period count could sell one bed twice.
 - Deposit: fixed = the room price's deposit (`room_type_prices.deposit_minor`); percent = whole-number percentage of the price (`tenant_settings.deposit_value`). This closes the Phase 2 open item on `deposit_value` units.
 - Student emails on submitted, approved, rejected, waitlisted and expired, with a staff warning if a send fails.
+- Booking window closing: unreviewed and waitlisted requests stay with staff ("Keep for staff", 2026-11-22).
 - Hold-expiry schedule (every 15 minutes needs Vercel Pro); dev-only `embedded-postgres` and Lighthouse; house rules shown as plain text.
 
 ### Test results
@@ -541,12 +542,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 6 | `npm test` (unit + db; new pgTAP 024 with 34 assertions), 5 full runs | **First run: 1 failed, 408 passed; the failing test's name was not captured.** The next 4 runs: 409/409 passed. Cause unknown; treat as a possible flaky test |
 | 2026-11-22 | 6 | Mutation checks: (a) one expiry check a second early; (a2) both checks a second early; (b) request not lapsed; (c) suspended hostels included; (d) under-review requests closed; (e) users can run expiry; (f) batch limit ignored | (a) survived because the re-check under the lock still refuses the row; (a2) to (f) failed 024 as expected; migration restored |
 | 2026-11-22 | 6 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 6 | **GitHub Actions CI** on `staging` (commit `527bd14`, first version of the job) | Passed |
+| 2026-11-22 | 6 (decision) | `npm test` with pgTAP 024 updated to 33 assertions, 3 full runs with logs kept | 409/409 passed each time; the earlier single failure did not recur and remains unidentified |
+| 2026-11-22 | 6 (decision) | Mutation check: decision migration removed | 024 failed, as expected; migration restored |
+| 2026-11-22 | 6 (decision) | `npm run lint`, `npm run typecheck` | 0 problems / passed |
 
 ### Task 6 notes
 - Migration `20261122200000_add_expire_reservations.sql`: `public.expire_reservations(limit)`, service role only, for the job in task 13. `app.expire_reservations(now, limit)` takes the clock so tests can control it. Returns counts, whether more may be waiting, and request ids for student emails.
 - Locks follow request → reservation with `SKIP LOCKED`, so it cannot deadlock with staff actions. Real parallel behaviour is checked in task 8.
 - Suspended hostels are skipped, so a student does not lose a hold while staff are locked out. Such a hold lapses on the first run after the hostel is restored unless staff extend it first.
-- **Needs a product-owner decision:** following the state diagram, requests still `submitted` or `waitlisted` expire as soon as `booking_closes_at` passes, even if staff never looked at them. Only requests already under review stay with staff.
+- **Product owner decision (in chat, 2026-11-22, "Keep for staff"):** requests are not expired when `booking_closes_at` passes. Closing the window only stops new submissions; staff clear the queue by approving, waitlisting or rejecting. Migration `20261122210000` replaces the first version of the job, and BOOKING_AND_PAYMENT_FLOWS §2.1 is updated. The `expired` request status stays allowed but nothing sets it.
+- After a period has ended a request can no longer be approved, so staff should reject what is left. Task 17 should make old unreviewed requests easy to find.
 - Not here yet: in-flight payment grace (5b), invoice void (5a), allocation cancel (Phase 4), waitlist notification (task 9 onward).
 
 ### Task 5 notes
