@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-5 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-6 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -494,7 +494,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` applied on hosted dev (confirmed 2026-11-22)
-- [ ] 6. Hold expiry and closing requests when a period ends
+- [x] 6. Hold expiry and closing requests when a period's booking window ends — done locally (2026-11-22); migration `20261122200000` **not yet applied on hosted dev** (wait for the product owner's answer in task 6 notes)
 - [ ] 7. Booking lookup RPC (status only)
 - [ ] 8. 20-parallel-approvals test on real Postgres
 - [ ] 9. Booking email sender
@@ -537,6 +537,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 5 | `npm test` (unit + db; new pgTAP 023 with 56 assertions) | 408/408 passed |
 | 2026-11-22 | 5 | Mutation checks: (a) cancel accepts `bookings.review`; (b) reject allowed from submitted; (c) extension limit removed; (d) overdue capacity check removed; (e) overdue hold not restarted; (f) cancel leaves the reservation live | 023 failed each time, as expected; migration restored |
 | 2026-11-22 | 5 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 5 | **GitHub Actions CI** on `staging` (commit `acab246`) | Passed |
+| 2026-11-22 | 6 | `npm test` (unit + db; new pgTAP 024 with 34 assertions), 5 full runs | **First run: 1 failed, 408 passed; the failing test's name was not captured.** The next 4 runs: 409/409 passed. Cause unknown; treat as a possible flaky test |
+| 2026-11-22 | 6 | Mutation checks: (a) one expiry check a second early; (a2) both checks a second early; (b) request not lapsed; (c) suspended hostels included; (d) under-review requests closed; (e) users can run expiry; (f) batch limit ignored | (a) survived because the re-check under the lock still refuses the row; (a2) to (f) failed 024 as expected; migration restored |
+| 2026-11-22 | 6 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 6 notes
+- Migration `20261122200000_add_expire_reservations.sql`: `public.expire_reservations(limit)`, service role only, for the job in task 13. `app.expire_reservations(now, limit)` takes the clock so tests can control it. Returns counts, whether more may be waiting, and request ids for student emails.
+- Locks follow request → reservation with `SKIP LOCKED`, so it cannot deadlock with staff actions. Real parallel behaviour is checked in task 8.
+- Suspended hostels are skipped, so a student does not lose a hold while staff are locked out. Such a hold lapses on the first run after the hostel is restored unless staff extend it first.
+- **Needs a product-owner decision:** following the state diagram, requests still `submitted` or `waitlisted` expire as soon as `booking_closes_at` passes, even if staff never looked at them. Only requests already under review stay with staff.
+- Not here yet: in-flight payment grace (5b), invoice void (5a), allocation cancel (Phase 4), waitlist notification (task 9 onward).
 
 ### Task 5 notes
 - Migration `20261122190000_add_booking_staff_decisions.sql`: `start_booking_review`, `reject_booking_request`, `waitlist_booking_request`, `confirm_reservation` and `extend_hold` need `bookings.review`; `cancel_booking_request` needs `bookings.cancel`. Errors: 42501, 22023 invalid input, 55000 wrong state, `AS409` no capacity.
