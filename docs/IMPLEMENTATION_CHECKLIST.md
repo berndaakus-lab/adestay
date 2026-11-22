@@ -239,7 +239,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` applied on hosted dev (2026-11-14)
 - [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` to be applied on hosted dev
 - [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` to be applied on hosted dev
-- [ ] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator
+- [x] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator — done locally (2026-11-22); no migration
 - [ ] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests
 - [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
 - [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
@@ -289,6 +289,13 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 5 (revised) | `npm run test:db` (pgTAP 013 now 30 assertions: permission check, no direct inserts, service role can write) | 17/17 passed |
 | 2026-11-22 | 5 (revised) | Mutation check: old insert policy left in place | 3 assertions failed, as expected; migration restored |
 | 2026-11-22 | 5 (revised) | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
+| 2026-11-22 | 5 (revised) | **GitHub Actions CI run 44994656670** on `staging` (commit `6967b55`) | Passed |
+| 2026-11-22 | 6 | `npm test` (14 files: new validation and action tests; TS brand-colour rule compared with the SQL function across the colour space) | 209/209 passed |
+| 2026-11-22 | 6 | Mutation checks on `runAction`: (a) permission check removed; (b) session + MFA check removed | 2 tests failed each, as expected; file restored |
+| 2026-11-22 | 6 | PGlite probe: every column the actions write is granted to `authenticated`; update schema with id parses correctly | Passed (probe not kept) |
+| 2026-11-22 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` | 0 problems / passed / succeeded |
+| 2026-11-22 | 6 | `npm audit --omit=dev --audit-level=high` | No high/critical; 1 **moderate** advisory group on `next` 16.0.0-16.4.4 (installed 16.4.3; fix in later 16.4.x) |
+| 2026-11-22 | 6 | PGlite probe: active hostel admin with an **aal1** JWT inserts into `room_types` | **Write succeeded: open security finding, see task 6 notes** |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -335,3 +342,17 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - **Upload path (product owner, in chat, 2026-11-22): server-only.** Migration `20261122100000_make_public_uploads_server_only.sql` drops `tenant_public_insert` and adds `public.can_upload_public_asset(name)`. Task 7 must: call that check with the user's session, validate and re-encode the file, then upload with the service role from `src/lib/server/uploads`. Listing and deleting keep their user-session policies. This closes the gap where a staff session could skip the re-encode.
 - Hosted dev: bundle from the last applied migration: `--since 20261119100000` if task 5 is applied, `--since 20261114130000` if only task 4 is, `--since 20261114120000` if neither is.
 - If the SQL Editor refuses `create policy … on storage.objects` (ownership), tell me; the policies can be created from Storage → Policies with the same expressions.
+
+### Task 6 notes
+- `src/lib/server/actions/inventory-actions.ts`: create/update/delete for booking periods, room types, rooms and beds; create/release bed blocks; set/delete prices. Bind the slug in the page (`createRoom.bind(null, tenantSlug)`) for `useActionState`.
+- Every action checks, in order: app host, staff session + MFA (`requireStaffSession`, because layouts do not protect Server Actions), membership, permission, then Zod. `tenant_id` comes from the membership, never the form. Queries use the user's session, so RLS stays the final authority; a row RLS hides is reported as "no longer exists".
+- `setRoomTypePrice` updates, then inserts: a PostgREST upsert would also write `tenant_id` and parent keys, which the column grants refuse.
+- Errors: `src/lib/db-errors.ts` maps Postgres codes to staff messages; raw database text is never shown or logged (code + short reference only).
+- Money is typed in cedis and parsed to pesewas without floats (`parseCedisToPesewas`). Datetimes are read as Africa/Accra (UTC+0).
+- `src/lib/brand-color.ts` is the form rule (criterion 3); `tests/db/brand-color.test.ts` fails if it drifts from `app.brand_color_is_readable`.
+- Room photo rows are not here: they are created with the upload pipeline (task 7). Profile and settings actions come with their UI (task 12).
+- No browser or hosted test yet: the actions have no screens until task 13.
+
+### Open security findings (found 2026-11-22, not fixed)
+- **Hostel-admin MFA is enforced only in the app, not in the database.** `app.has_permission`, `app.is_hostel_admin` and `app.is_tenant_member` do not check `aal`. A hostel admin who has only their password (aal1 session) can call the Supabase API directly with the public anon key and read or write whatever their role allows. Confirmed in PGlite with an insert into `room_types`. Conflicts with SECURITY_THREAT_MODEL T4 and ADR-0002 ("MFA required for hostel admins"). Platform admins are not affected (`app.is_platform_admin` requires aal2).
+- **`next` 16.4.3 has moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed in a later 16.4.x; not upgraded yet.
