@@ -3,12 +3,9 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { dbErrorMessage, type DbError, type DbErrorMessages } from "@/lib/db-errors";
-import { requireStaffSession } from "@/lib/server/auth";
-import { isPlatformAdmin } from "@/lib/server/authz";
 import { sendInvitationEmail, type InvitationDelivery } from "@/lib/server/provisioning/invitations";
-import { authorizeStaffAction } from "@/lib/server/staff-action";
+import { authorizePlatformAction, authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
-import { getTenantContext } from "@/lib/server/tenant/context";
 import { fieldErrors } from "@/lib/validation/auth";
 import {
   changeRoleSchema,
@@ -57,13 +54,6 @@ function delivered(delivery: InvitationDelivery, id?: string): ProvisioningFormS
   return delivery === "failed"
     ? { status: "success", message: NOT_SENT, id, emailSent: false }
     : { status: "success", message: `Invitation saved. ${SENT}`, id, emailSent: true };
-}
-
-/** Same layered check as staff actions: host, session + MFA (may redirect), then platform admin. */
-async function authorizePlatformAction(): Promise<boolean> {
-  if ((await getTenantContext()).surface !== "app") return false;
-  await requireStaffSession("/platform");
-  return isPlatformAdmin();
 }
 
 // ---------------------------------------------------------------------------------------------

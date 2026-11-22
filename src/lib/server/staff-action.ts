@@ -1,7 +1,7 @@
 import "server-only";
 import type { Permission, TenantAccess } from "@/lib/permissions";
 import { requireStaffSession } from "@/lib/server/auth";
-import { AuthorizationError, requirePermission, requireTenantMember } from "@/lib/server/authz";
+import { AuthorizationError, isPlatformAdmin, requirePermission, requireTenantMember } from "@/lib/server/authz";
 import { getTenantContext } from "@/lib/server/tenant/context";
 
 /**
@@ -21,4 +21,11 @@ export async function authorizeStaffAction(tenantSlug: string, permission: Permi
     if (error instanceof AuthorizationError) return null;
     throw error;
   }
+}
+
+/** Same layered check for platform actions: host, session + MFA (may redirect), platform admin. */
+export async function authorizePlatformAction(): Promise<boolean> {
+  if ((await getTenantContext()).surface !== "app") return false;
+  await requireStaffSession("/platform");
+  return isPlatformAdmin();
 }

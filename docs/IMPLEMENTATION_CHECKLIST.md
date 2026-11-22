@@ -243,7 +243,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests — done locally (2026-11-22); needs hosted migrations `20261119100000` and `20261122100000`
 - [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
 - [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
-- [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
+- [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
 - [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
 - [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
 - [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
@@ -315,6 +315,11 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 9 | `npm test` (18 files; new CSV parser and action tests; pgTAP 016 with 35 assertions, including a 50-bed import) | 312/312 passed |
 | 2026-11-22 | 9 | Mutation checks: (a) import continues despite row errors; (b) permission check removed; (c) existing-room check removed | (a) and (c) pgTAP 016 aborted on a duplicate-room error; (b) 5 assertions failed; migration restored |
 | 2026-11-22 | 9 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 9 | **GitHub Actions CI run 44999812270** on `staging` (commit `328ce26`) | Passed |
+| 2026-11-22 | 10 | `npm test` (19 files; new domain tests with a mocked Vercel API; pgTAP 017 with 19 assertions) | 346/346 passed |
+| 2026-11-22 | 10 | Mutation checks: (a) any bearer accepted; (b) DNS state ignored; (c) job may change live domains | 2 tests, 1 test and 4 assertions failed, as expected; files restored |
+| 2026-11-22 | 10 | Live production server, `/api/cron/verify-domains`: no header, wrong secret, right secret | 401 / 401 / 200 `skipped: vercel_not_configured` |
+| 2026-11-22 | 10 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -405,3 +410,12 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Room, block, floor and bed labels allow letters, digits, spaces and `. _ / -` (must start and end with a letter or digit), which refuses spreadsheet formulas (`=`, `+`, `@`) before they can reach a later export.
 - `src/lib/server/actions/import-actions.ts`: `previewInventoryImport` and `commitInventoryImport`. Both receive the file and revalidate; the import never relies on an earlier preview. At most 50 row errors are returned, with the total count.
 - **Not verified yet:** the import on hosted dev; the screen comes in task 13.
+
+### Task 10 notes
+- `src/lib/server/domains/vercel.ts`: add, verify, read and remove project domains. Endpoints checked against Vercel's REST API docs on 2026-11-22 (`POST /v10/projects/{id}/domains`, `GET` and `DELETE /v9/projects/{id}/domains/{domain}`, `POST .../verify`, `GET /v6/domains/{domain}/config`). **Never called against the real API** (no token here); tests use a mocked API.
+- A domain becomes `verified` only when Vercel confirms ownership **and** DNS is correctly configured. Network, auth, rate-limit and server errors change nothing. A 409 is shown as "used by another project".
+- `src/lib/server/actions/domain-actions.ts`: add, check, set status by hand (only while no token is set), make primary, remove. Removing a custom domain also detaches it from Vercel (T19); if that fails, the admin is told to remove it in Vercel.
+- `/api/cron/verify-domains`: `Authorization: Bearer <CRON_SECRET>` in constant time; refuses everything if the secret is missing or under 16 characters; up to 20 domains per run, oldest check first; returns counts only.
+- Migration `20261122140000_add_domain_check_recording.sql`: `public.record_domain_check`, service role only. It can only move a non-primary custom domain that is pending or failed, so a DNS or API problem cannot take a live site offline.
+- **No `vercel.json` schedule was added** (the product owner manages Vercel). Vercel runs crons on production deployments only, and on Hobby a schedule more frequent than daily fails the deployment. Decision needed: daily on any plan, or every 30 minutes on Pro as SYSTEM_ARCHITECTURE §6 assumes.
+- **Product owner, Vercel:** `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET` (16+ characters). Redeploy after setting them.

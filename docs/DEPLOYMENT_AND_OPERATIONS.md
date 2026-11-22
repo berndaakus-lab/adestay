@@ -45,7 +45,7 @@ A `.env.example` with these names and empty values will be committed in Phase 1.
 ## 3. Domains
 
 - **Platform domain** [D-1]: e.g. `<brand>.com`, with wildcard `*.<brand>.com` on Vercel for tenant subdomains, plus `app.<brand>.com` for staff/platform.
-- **Custom domains:** the hostel adds `book.theirhostel.com.gh`. The platform admin adds it via the Vercel Domains API. The UI shows the CNAME/TXT records to set; a cron polls verification; status is mirrored in `tenant_domains`. SSL is automatic through Vercel.
+- **Custom domains:** the hostel adds `book.theirhostel.com.gh`. The platform admin adds it via the Vercel Domains API. The UI shows the CNAME/TXT records to set; `/api/cron/verify-domains` polls verification (Bearer `CRON_SECRET`, at least 16 characters); status is mirrored in `tenant_domains`. SSL is automatic through Vercel. The schedule is **not** in the repository yet: Vercel runs crons on production deployments only, and a Hobby project fails to deploy with a schedule more frequent than daily. Until the product owner chooses a schedule, use "Check" in the platform UI.
 - **Email sending domain:** use the platform domain (`bookings@<brand>.com`) with the hostel name as display name and reply-to set to the hostel's address. Per-tenant sending domains are out of scope for v1.
 
 ## 3a. Supabase Auth settings (dashboard, per environment)
