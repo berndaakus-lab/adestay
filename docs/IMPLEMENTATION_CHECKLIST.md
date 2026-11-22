@@ -241,7 +241,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` to be applied on hosted dev
 - [x] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator — done locally (2026-11-22); no migration
 - [x] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests — done locally (2026-11-22); needs hosted migrations `20261119100000` and `20261122100000`
-- [ ] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow
+- [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
 - [ ] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows
 - [ ] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token
 - [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
@@ -307,6 +307,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 7 | `npm test` (16 files; new image-processing tests with real `sharp` and upload-action tests: SVG, HTML, PDF, GIF, appended and JPEG-comment polyglots, truncated file, > 5 MB, decompression bomb, EXIF/GPS) | 251/251 passed |
 | 2026-11-22 | 7 | Mutation checks: (a) file-type checks removed; (b) metadata kept; (c) database permission check removed | 3, 3 and 2 tests failed, as expected; files restored |
 | 2026-11-22 | 7 | `npm run lint`, `npm run typecheck`, `npm run build` (2 runs), `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / 2 of 2 succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 7 | **GitHub Actions CI run 44997609463** on `staging` (commit `510f10d`) | Passed |
+| 2026-11-22 | 8 | `npm test` (17 files; new provisioning action tests and pgTAP 015 with 8 assertions) | 275/275 passed |
+| 2026-11-22 | 8 | Mutation checks: (a) platform-admin check removed; (b) existing accounts reported differently; (c) invitation RPC returns all staff | 1 test, 1 test and 2 assertions failed, as expected; files restored |
+| 2026-11-22 | 8 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -377,3 +381,15 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - `sharp` 0.35.5 is a direct, pinned dependency (approved 2026-11-14). `serverActions.bodySizeLimit` is `6mb` (5 MB file + multipart overhead); this setting applies to all Server Actions.
 - **Not verified yet:** real uploads through Supabase Storage and Vercel (no keys here; no screen until task 13).
 - **Known limit to check on staging:** Vercel documents a request-body limit of about 4.5 MB for Functions, so files between roughly 4.5 and 5 MB may be refused by Vercel before our code runs. Task 13 should shrink large photos in the browser before sending, or the product owner can lower the stated limit to 4 MB. The server still re-encodes everything.
+
+### Task 8 notes
+- `src/lib/server/actions/provisioning-actions.ts`. Platform: `createTenant`, `setTenantStatus`, `inviteFirstAdmin`, `resendFirstAdminInvite`. Hostel (`staff.manage`): `inviteStaff`, `resendStaffInvitation`, `changeMemberRole`, `revokeMember`. Every permission decision is made by an RPC with the caller's session; the service role is used only afterwards, to send the email (`src/lib/server/provisioning/invitations.ts`).
+- Migration `20261122120000_add_platform_admin_invitation_status.sql`: `public.platform_hostel_admin_invitations(tenant)`, the narrow read planned in task 4 (hostel-admin rows only, email + status, aal2 platform admin). Needed to show and re-send the first-admin invitation without giving platform admins the staff list.
+- **Accepting:** `/account/continue` and `/account` call `accept_my_invitations` before reading memberships, so a new hostel admin goes straight to MFA setup. A failure does not block sign-in.
+- **New user path:** invitation email → `/auth/callback` (`token_hash`, `type=invite`) → choose a password on `/reset-password` → `/account/continue` → accepted → MFA setup if admin. An expired link falls back to "forgot password", which also works because the invite created the account.
+- **Existing user path:** Supabase sends no invite to a confirmed account; the invitation is accepted at their next visit. The staff message is identical in both cases, so a hostel cannot discover who has an AdeStay account. Such a person gets **no email** until the notification work in Phase 6.
+- If the email fails, the record is kept and the result says so (`emailSent: false`), so the UI can offer Resend.
+- The invite link target comes from the Supabase template and Site URL, not this request's Host header.
+- Until D-1, `createTenant` makes no subdomain row; the hostel is reached through the staging preview.
+- **Product owner, hosted:** set the Invite user template (DEPLOYMENT_AND_OPERATIONS §3a). Until D-9, invitation emails reach only Supabase project team members.
+- **Not verified yet:** a real invitation email and link on staging. Screens come in tasks 11 and 12.

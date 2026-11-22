@@ -60,6 +60,7 @@ Set by the product owner in Supabase Dashboard → Authentication. Values for th
 | Email OTP expiry | Sign In / Providers → Email | 600 seconds |
 | TOTP MFA | Multi-Factor | Enabled |
 | Magic Link email template | Emails → Templates → Magic Link | Must show the code: include `{{ .Token }}` (students type the 6-digit code) |
+| Invite user email template | Emails → Templates → Invite user | Link must be `<a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/reset-password">Accept your invitation</a>`. The default link does not work with the server callback. Site URL must be the staff app host. |
 | SMTP | Emails → SMTP | Custom provider required before real students sign in (D-9). Built-in email only reaches project team members. |
 | Leaked-password protection | Passwords | On, when the plan supports it |
 

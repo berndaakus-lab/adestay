@@ -2,13 +2,14 @@ import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { firstParam } from "@/lib/search-params";
-import { requireStaffSession } from "@/lib/server/auth";
+import { acceptPendingInvitations, requireStaffSession } from "@/lib/server/auth";
 import { getTenantContext } from "@/lib/server/tenant/context";
 
 // After sign-in: applies the MFA policy (setup or verify) before continuing to `next`.
 async function Continue({ searchParams }: { searchParams: PageProps<"/account/continue">["searchParams"] }): Promise<never> {
   if ((await getTenantContext()).surface !== "app") notFound();
   const next = safeNextPath(firstParam((await searchParams).next), "/account");
+  await acceptPendingInvitations();
   await requireStaffSession(next);
   redirect(next);
 }
