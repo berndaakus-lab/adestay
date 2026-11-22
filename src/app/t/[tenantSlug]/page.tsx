@@ -31,7 +31,7 @@ async function Overview({ params }: { params: PageProps<"/t/[tenantSlug]">["para
           title="Your workspace is ready"
           description={
             access.role === "hostel_admin"
-              ? "Next, the hostel's rooms, beds and prices will be set up here (Phase 2). Booking requests follow in Phase 3."
+              ? "Next, set up the hostel's rooms, beds and prices under Rooms & beds. Booking requests follow in Phase 3."
               : "Your hostel admin is setting things up. Sections you can use will appear in the menu."
           }
         />

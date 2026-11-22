@@ -16,10 +16,13 @@ export interface StaffNavItem {
   comingIn?: string;
 }
 
+/** Who can open the inventory area. Staff with pricing.manage alone reach Periods, Room types and Prices. */
+export const INVENTORY_PAGE_PERMISSIONS: Permission[] = ["inventory.read", "inventory.manage", "pricing.manage"];
+
 export const STAFF_NAV: StaffNavItem[] = [
   { label: "Overview", path: "", group: "Workspace" },
   { label: "Reservations", path: "/reservations", group: "Workspace", anyOf: ["bookings.read"], comingIn: "Phase 3" },
-  { label: "Rooms & beds", path: "/inventory", group: "Workspace", anyOf: ["inventory.read", "inventory.manage"], comingIn: "Phase 2" },
+  { label: "Rooms & beds", path: "/inventory", group: "Workspace", anyOf: INVENTORY_PAGE_PERMISSIONS },
   { label: "Residents", path: "/residents", group: "Workspace", anyOf: ["residents.read"], comingIn: "Phase 4" },
   { label: "Check-in", path: "/check-in", group: "Operations", anyOf: ["checkin.manage"], comingIn: "Phase 4" },
   { label: "Payments", path: "/payments", group: "Operations", anyOf: ["finance.read"], comingIn: "Phase 5" },

@@ -23,11 +23,12 @@ export function SectionNav({ label, items }: { label: string; items: { href: str
   return (
     <nav aria-label={label} className="-mx-1 overflow-x-auto">
       <ul className="flex min-w-max gap-1 border-b border-border px-1">
-        {items.map((item) => (
+        {items.map((item, index) => (
           <li key={item.href}>
             <Link
               href={item.href}
-              aria-current={pathname === item.href ? "page" : undefined}
+              // The first tab is the section's root, so only an exact match counts for it.
+              aria-current={pathname === item.href || (index > 0 && pathname.startsWith(`${item.href}/`)) ? "page" : undefined}
               className="flex min-h-11 items-center border-b-2 border-transparent px-3 text-sm text-muted-strong hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
             >
               {item.label}

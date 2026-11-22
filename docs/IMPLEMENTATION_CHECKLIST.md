@@ -246,7 +246,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
 - [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [x] 12. Hostel admin UI: profile/branding, settings, staff and permission sets — done locally (2026-11-22); not yet exercised against hosted Supabase
-- [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
+- [x] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [ ] 14. E2E + axe (desktop, 360 px), acceptance review
 
 ### Decisions (product owner, in chat, 2026-11-14: "Approve defaults")
@@ -327,6 +327,9 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 12 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: admin, manager (read-only), front desk (no access), admin without MFA; profile, colours, real image uploads incl. a photo over 4 MB, booking rules, team, permission sets | 60/60 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; controls ≥ 44 px |
 | 2026-11-22 | 12 | Mutation checks: (a) `settings.read` allowed to edit; (b) system-set guard removed | 1 test failed each, as expected; file restored |
 | 2026-11-22 | 12 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 389/389 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 12 | **GitHub Actions CI run 45004987681** on `staging` (commit `40873a9`) | All 3 jobs passed |
+| 2026-11-22 | 13 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: full setup of a 50-bed hostel by hand + CSV, photos, blocks, prices, capacity, search, deletes; admin, manager, read-only, pricing-only and no-permission staff | 76/76 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; no console errors. Task 12 flow re-run: 60/60 |
+| 2026-11-22 | 13 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 402/402 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -443,3 +446,11 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - The workspace menu now marks the current section, and Settings is no longer "Soon".
 - Brand colours, logo and main photo are stored but the public site does not display them yet (Phase 3).
 - The fake API was a local check only and is not committed. It does not prove real RLS, Storage, Auth or email. In development Next logs an "instant validation" message on pages that deliberately redirect or return 404; it does not appear as a page error.
+
+### Task 13 notes
+- `/t/{slug}/inventory`: **Capacity** (per period and room type, with setup steps on an empty hostel), **Periods**, **Room types** (with photos and required alt text), **Rooms and beds** (search, filter, 50 per page; room page with beds and date blocks), **Prices** (per period, typed in cedis) and **Import CSV** (template, preview, row errors, confirm).
+- Access: the area opens for `inventory.read`, `inventory.manage` or `pricing.manage`. Rooms and capacity need an inventory permission; editing needs `inventory.manage`; prices need `pricing.manage`; import needs `inventory.manage`. Staff with `pricing.manage` alone land on Prices.
+- `src/components/forms/record-dialog.tsx`: shared add/edit and confirm dialogs. Each opening starts from current values; refusals such as "still in use" show inside the dialog.
+- Blocks are displayed with their real last day (Postgres stores the end as exclusive).
+- **Acceptance criterion 2:** a 50-bed hostel was modelled through the real screens (2 beds by hand, 48 by CSV) and showed the expected 50 beds / 1 out of service / 49 sellable. The capacity arithmetic in that run came from the fake API; the real SQL function is covered by pgTAP 010 and the real import by pgTAP 016. The two have not yet run together on hosted Supabase.
+- **Not verified on hosted Supabase:** PostgREST embedded reads (`rooms` with `beds`, `beds` with `bed_blocks`), real Storage uploads, and RLS through these screens. Task 14 should cover these.
