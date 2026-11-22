@@ -9,7 +9,7 @@ export function SiteHeader({ name, href }: { name: string; href: (path: string) 
   return (
     <header className="border-b border-border bg-background">
       <div className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between gap-4 px-4 md:px-10">
-        <Link href={href("/")} aria-label={`${name} home`}>
+        <Link href={href("/")}>
           <Logo name={name} tagline="Student residence" />
         </Link>
         <nav aria-label="Main" className="flex items-center gap-2">

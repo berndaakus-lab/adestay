@@ -10,7 +10,7 @@
 |---|---|---|
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
-| 2: Tenant setup & Administration | **In progress** (task breakdown and decisions approved 2026-11-14) | Product owner, in chat, 2026-11-14 |
+| 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
 | 3: Public sites & Booking | Not started | — |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
@@ -247,7 +247,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [x] 12. Hostel admin UI: profile/branding, settings, staff and permission sets — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [x] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import — done locally (2026-11-22); not yet exercised against hosted Supabase
-- [ ] 14. E2E + axe (desktop, 360 px), acceptance review
+- [x] 14. E2E + axe (desktop, 360 px), acceptance review — done locally (2026-11-22); criterion 1 and hosted checks remain open
 
 ### Decisions (product owner, in chat, 2026-11-14: "Approve defaults")
 | Decision | Outcome |
@@ -330,6 +330,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 12 | **GitHub Actions CI run 45004987681** on `staging` (commit `40873a9`) | All 3 jobs passed |
 | 2026-11-22 | 13 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: full setup of a 50-bed hostel by hand + CSV, photos, blocks, prices, capacity, search, deletes; admin, manager, read-only, pricing-only and no-permission staff | 76/76 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; no console errors. Task 12 flow re-run: 60/60 |
 | 2026-11-22 | 13 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 402/402 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 13 | **GitHub Actions CI run 45027324277** on `staging` (commit `e75a35d`) | All 3 jobs passed |
+| 2026-11-22 | 14 | pgTAP 018: whole Phase 2 journey on the real schema, RPCs and RLS as API roles (onboard, MFA, 50-bed import, capacity, isolation, suspend, restore) | 32/32 assertions passed |
+| 2026-11-22 | 14 | `npm run test:e2e:admin` (new; run locally, not yet in CI): real production build in Chromium at 1280 px and 360 px against the committed fake API; axe WCAG 2.2 AA on every main screen and dialog | 18/18 passed |
+| 2026-11-22 | 14 | Unit, db, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 380/380, 23/23 (473 pgTAP assertions in files), 0 problems, passed, succeeded, clean, 30/30, 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -454,3 +458,28 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Blocks are displayed with their real last day (Postgres stores the end as exclusive).
 - **Acceptance criterion 2:** a 50-bed hostel was modelled through the real screens (2 beds by hand, 48 by CSV) and showed the expected 50 beds / 1 out of service / 49 sellable. The capacity arithmetic in that run came from the fake API; the real SQL function is covered by pgTAP 010 and the real import by pgTAP 016. The two have not yet run together on hosted Supabase.
 - **Not verified on hosted Supabase:** PostgREST embedded reads (`rooms` with `beds`, `beds` with `bed_blocks`), real Storage uploads, and RLS through these screens. Task 14 should cover these.
+
+### Task 14 notes
+- `tests/e2e-admin/`: browser tests for platform, settings and inventory, run by `npm run test:e2e:admin`. **Not in CI yet:** GitHub refused the workflow change because this machine's login lacks the `workflow` scope, so the product owner needs to add the CI step (patch kept locally at `supabase/.temp/ci-admin-e2e.patch`). `fake-supabase.mjs` is a local in-memory API with made-up data and needs no secrets. **It does not prove RLS, Auth, Storage or email.**
+- `supabase/tests/database/018_phase2_acceptance.test.sql` covers that gap as far as possible locally: the same journey on the real migrations and RLS. It also confirms a single foreign key for each embedded read used by the room screens.
+- **Found and fixed:** the public site header link had an accessible name that did not match its visible text (WCAG 2.5.3). The public shell had not been scanned in Phase 1.
+
+### Phase 2 acceptance criteria (IMPLEMENTATION_PLAN §2)
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Onboard a tenant end to end in under 10 minutes on staging: subdomain live, admin invited | **Not met yet** | Flow works locally (pgTAP 018, E2E). Never run on staging or timed. Needs hosted migrations, the Invite user template, D-1 (subdomain) and D-9 for addresses outside the Supabase team |
+| 2 | Model 50 beds and see correct sellable capacity per room type × period | **Met locally; hosted check pending** | pgTAP 010, 016, 018 on real SQL; E2E through the screens |
+| 3 | Brand colour rejects contrast below 4.5:1 | **Met** | Database constraint (pgTAP 011, 018), form rule compared with SQL (`tests/db/brand-color.test.ts`), E2E |
+| 4 | Uploads reject non-image, SVG and > 5 MB, and strip EXIF | **Met locally; real Storage pending** | `tests/unit/image-processing.test.ts` with real `sharp`, upload action tests, pgTAP 013, E2E |
+| 5 | Suspended site shows the unavailable page; staff are denied | **Met locally; hosted check pending** | pgTAP 012, 018; E2E on the real page |
+| 6 | Isolation and RBAC tests extended to all new tables; all pass | **Met** (database level) | pgTAP 001, 009-018 as `anon`/`authenticated` with JWT claims; not yet repeated over HTTP against the hosted project |
+
+### Open before Phase 2 sign-off (product owner)
+- [ ] Apply pending migrations on hosted dev (last confirmed: `20261114120000`; latest: `20261122140000`).
+- [ ] Set the Invite user email template (DEPLOYMENT_AND_OPERATIONS §3a).
+- [ ] D-1 root domain and wildcard on Vercel; D-9 email provider.
+- [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (Pro every 30 minutes, or Hobby daily).
+- [ ] Confirm `deposit_value` units (fixed = pesewas, percent = whole number).
+- [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
+- [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
+- [ ] Add the admin E2E step to `.github/workflows/ci.yml` (needs a GitHub login with the `workflow` scope).
