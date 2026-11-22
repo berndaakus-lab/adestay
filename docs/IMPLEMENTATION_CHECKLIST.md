@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-2 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-3 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -491,7 +491,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 ### Tasks
 - [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
 - [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
-- [ ] 3. Capacity with live reservations; public Available / Limited / Full indicator
+- [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` to be applied on hosted dev
 - [ ] 4. Approval RPC with the room-type lock
 - [ ] 5. Reject, waitlist, cancel, extend hold, confirm
 - [ ] 6. Hold expiry and closing requests when a period ends
@@ -525,6 +525,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 2 | `npm test` (unit + db; new pgTAP 020 with 41 assertions) | 405/405 passed |
 | 2026-11-22 | 2 | Mutation checks: (a) email verification removed; (b) rate limit removed; (c) period status ignored; (d) retry lookup removed | 020 failed each time, as expected; migration restored |
 | 2026-11-22 | 2 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm run test:e2e:admin` | 0 problems / passed / succeeded / clean / 18/18 |
+| 2026-11-22 | 2 | **GitHub Actions CI** on `staging` (commit `d37da7e`) | Passed |
+| 2026-11-22 | 3 | `npm test` (unit + db; new pgTAP 021 with 32 assertions) | 406/406 passed |
+| 2026-11-22 | 3 | Mutation checks: (a) overlapping bookings summed; (b) overdue holds counted; (c) Limited threshold changed; (d) unpublished room types listed; (e) staff permission removed | 021 failed each time, as expected; migration restored |
+| 2026-11-22 | 3 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 3 notes
+- Migration `20261122170000_add_room_type_availability.sql`. `app.room_type_availability` is the single implementation for the approval RPC (task 4). `public.room_type_availability` gives staff exact figures (inventory or `bookings.read`). `public.room_type_availability_indicators` is public and returns only `available`, `limited` (3 or fewer) or `full`.
+- Reserved beds = the most live reservations on any one day of the period, across all overlapping periods of that room type. Two non-overlapping semesters can share a bed; neither can be sold on top of a full academic year.
+- Live = confirmed, fulfilled, or held and not past `hold_expires_at`. An overdue hold stops counting immediately, so **extending a hold (task 5) must refuse or re-check capacity once it is overdue**.
+- The indicator lists only what a student can request now: published hostel and room type, open period inside its booking window, price set.
+- The Inventory capacity table still shows sellable beds before reservations; task 17 should show reserved and remaining beds using the staff function.
 
 ### Task 2 notes
 - Migration `20261122160000_add_submit_booking_request.sql`: `public.submit_booking_request` (signed-in users only), `app.quote_deposit`, `app.generate_booking_reference`. Errors: 42501 not allowed, 22023 invalid choice, 23505 already has a live request, `AS429` too many requests.
