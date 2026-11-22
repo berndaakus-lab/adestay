@@ -298,6 +298,11 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 6 | PGlite probe: active hostel admin with an **aal1** JWT inserts into `room_types` | **Write succeeded: open security finding, see task 6 notes** |
 | 2026-11-22 | security | `next` and `eslint-config-next` upgraded 16.4.3 → 16.4.6: `npm audit --omit=dev` | 0 vulnerabilities (full `npm audit` still reports 10 moderate, all in dev dependencies; not changed here) |
 | 2026-11-22 | security | After the upgrade: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | passed / passed / 209/209 / succeeded / clean (22 files, 3 checks) / 30/30 |
+| 2026-11-22 | 6 | **GitHub Actions CI run 44995493881** on `staging` (commit `c10dabb`) | Passed |
+| 2026-11-22 | MFA fix | `npm test` (14 Vitest files incl. new pgTAP 014 with 30 assertions; 005 and 012 admin sessions now aal2) | 210/210 passed |
+| 2026-11-22 | MFA fix | Mutation checks: (a) policy always true; (b) check removed from `has_permission` | (a) 16 assertions failed, (b) 11 failed, as expected; migration restored |
+| 2026-11-22 | MFA fix | `npm run lint`, `npm run typecheck`, `CI=1 npx playwright test` | 0 problems / passed / 30/30 passed |
+| 2026-11-22 | MFA fix | Rebased on `next` 16.4.6, then: `npm test`, lint, typecheck, `npm run build` (4 runs), `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 210/210 / 0 problems / passed / 4 of 4 succeeded / clean / 30/30 / 0 vulnerabilities. On 16.4.3, 2 of 4 builds had stopped with a Next.js `SecurityFatalError` upgrade notice |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -356,5 +361,6 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - No browser or hosted test yet: the actions have no screens until task 13.
 
 ### Open security findings (found 2026-11-22, not fixed unless marked `[x]`)
-- **Hostel-admin MFA is enforced only in the app, not in the database.** `app.has_permission`, `app.is_hostel_admin` and `app.is_tenant_member` do not check `aal`. A hostel admin who has only their password (aal1 session) can call the Supabase API directly with the public anon key and read or write whatever their role allows. Confirmed in PGlite with an insert into `room_types`. Conflicts with SECURITY_THREAT_MODEL T4 and ADR-0002 ("MFA required for hostel admins"). Platform admins are not affected (`app.is_platform_admin` requires aal2).
 - [x] **`next` 16.4.3 had moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed 2026-11-22 by upgrading to 16.4.6 (security fixes landed in 16.4.5). The 16.4.6 docs require no change to `src/proxy.ts` or `next.config.ts`.
+- [x] **Hostel-admin MFA was enforced only in the app (fixed locally 2026-11-22).** Migration `20261122110000_enforce_admin_mfa_in_database.sql` adds `app.caller_meets_mfa_policy()` to `is_tenant_member`, `is_hostel_admin` and `has_permission`: an active hostel admin of an active hostel, or a platform-admin account, holds no staff access in any hostel until aal2. `my_memberships` stays readable at aal1 so the app can route them to MFA; their own resident record is unaffected. **To apply on hosted dev.**
+- [ ] **Not covered by that fix:** ordinary staff who enrolled TOTP voluntarily. The app demands their code, but the database still accepts their aal1 session, within their permission set.

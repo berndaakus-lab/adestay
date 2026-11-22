@@ -64,8 +64,8 @@ All are `STABLE`, `SECURITY DEFINER`, `set search_path = ''`, and use `(select a
 |---|---|
 | `app.is_platform_admin()` | the caller is in `platform_admins` **and** the JWT has `aal = 'aal2'` (MFA) |
 | `app.tenant_is_active(tid)` | `tenants.status = 'active'` |
-| `app.is_tenant_member(tid)` | an active `tenant_memberships` row exists for the caller **and** the tenant is active |
-| `app.has_permission(tid, perm text)` | member with role `hostel_admin`, **or** whose permission set contains `perm` |
+| `app.is_tenant_member(tid)` | an active `tenant_memberships` row exists for the caller **and** the tenant is active **and** the session meets the MFA policy (`app.caller_meets_mfa_policy()`: accounts that are hostel or platform admins need aal2) |
+| `app.has_permission(tid, perm text)` | member with role `hostel_admin`, **or** whose permission set contains `perm`, subject to the same MFA policy |
 | `app.my_resident_id(tid)` | returns `residents.id` for the caller in that tenant (or null) |
 | `app.has_break_glass(tid)` | an unexpired, unrevoked `platform_access_grants` row exists for the caller |
 

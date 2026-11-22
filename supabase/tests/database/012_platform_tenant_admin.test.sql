@@ -115,7 +115,7 @@ select lives_ok($$select public.set_tenant_status((tests.tenant('new-hostel')).i
   'platform admin: activates the hostel');
 select tests.as_owner();
 
-select tests.as_user('00000000-0000-4000-8000-0000000000f1');
+select tests.as_user('00000000-0000-4000-8000-0000000000f1', 'aal2');
 select is(public.accept_my_invitations(), 1, 'the invited owner accepts on first sign-in');
 select ok(app.has_permission((tests.tenant('new-hostel')).id, 'settings.manage'), 'the new hostel admin can manage the hostel');
 select tests.as_owner();
@@ -136,7 +136,7 @@ select throws_ok($$select public.set_tenant_status((tests.tenant('new-hostel')).
   '22023', null, 'archiving is not available through this RPC');
 select tests.as_owner();
 
-select tests.as_user('00000000-0000-4000-8000-0000000000f1');
+select tests.as_user('00000000-0000-4000-8000-0000000000f1', 'aal2');
 select ok(not app.is_tenant_member((tests.tenant('new-hostel')).id), 'suspended: the hostel admin is denied');
 select tests.as_owner();
 
@@ -152,7 +152,7 @@ select ok((tests.tenant('new-hostel')).suspended_at is null and (tests.tenant('n
   'restoring clears the suspension');
 select tests.as_owner();
 
-select tests.as_user('00000000-0000-4000-8000-0000000000f1');
+select tests.as_user('00000000-0000-4000-8000-0000000000f1', 'aal2');
 select ok(app.is_tenant_member((tests.tenant('new-hostel')).id), 'restored: the hostel admin has access again');
 select ok(exists (select 1 from public.audit_logs where action = 'tenant.suspended' and reason = 'Subscription unpaid'),
   'the hostel admin sees the suspension and its reason in their audit log');
@@ -194,7 +194,7 @@ select lives_ok($$select public.remove_domain((tests.domain('new-hostel.adestay.
   'the former primary subdomain can be removed with a reason');
 select tests.as_owner();
 
-select tests.as_user('00000000-0000-4000-8000-0000000000f1');
+select tests.as_user('00000000-0000-4000-8000-0000000000f1', 'aal2');
 select is((select count(*)::int from public.tenant_domains where tenant_id = (tests.tenant('new-hostel')).id), 2,
   'hostel admin: can see their hostel''s domains (including removed)');
 select throws_ok($$select public.add_custom_domain((tests.tenant('new-hostel')).id, 'rooms.newhostel.com.gh')$$,
