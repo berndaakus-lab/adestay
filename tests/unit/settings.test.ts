@@ -106,8 +106,8 @@ describe("profile", () => {
 });
 
 describe("booking rules", () => {
-  it("stores a fixed deposit in pesewas and clears unused values", () => {
-    expect(operationalSettingsSchema.parse(rules).depositValue).toBe(50000);
+  it("keeps a whole-number percentage and clears unused values", () => {
+    expect(operationalSettingsSchema.parse(rules).depositValue).toBe(0);
     expect(operationalSettingsSchema.parse({ ...rules, depositPolicy: "percent", depositValue: "30" }).depositValue).toBe(30);
     expect(operationalSettingsSchema.parse({ ...rules, depositPolicy: "full", depositValue: "99" }).depositValue).toBe(0);
     expect(operationalSettingsSchema.parse({ ...rules, depositPolicy: "none", depositValue: "" }).depositValue).toBe(0);
@@ -117,13 +117,13 @@ describe("booking rules", () => {
     { holdDays: "15" },
     { holdExtensionMax: "4" },
     { minPaidPercentForCheckin: "101" },
-    { depositValue: "" },
+    { depositPolicy: "percent", depositValue: "" },
     { depositPolicy: "percent", depositValue: "101" },
     { depositPolicy: "other" },
   ])("refuses %j", (change) => expect(operationalSettingsSchema.safeParse({ ...rules, ...change }).success).toBe(false));
   it("saves the hold in hours for the member's hostel only", async () => {
     await updateOperationalSettings("hostel-a", idle, form({ ...rules, tenant_id: OTHER, booking_requires_verified_email: "false" }));
-    expect(h.calls[0].payload).toMatchObject({ hold_duration_hours: 120, deposit_value: 50000 });
+    expect(h.calls[0].payload).toMatchObject({ hold_duration_hours: 120, deposit_value: 0 });
     expect(h.calls[0].payload).not.toHaveProperty("tenant_id");
     expect(h.calls[0].payload).not.toHaveProperty("booking_requires_verified_email");
     expect(h.calls[0].filters).toEqual([["tenant_id", TENANT]]);

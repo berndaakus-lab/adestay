@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: task 1 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults not yet confirmed (see "Phase 3 decisions awaiting confirmation") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-2 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -479,7 +479,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [ ] Set the Invite user email template (DEPLOYMENT_AND_OPERATIONS §3a).
 - [ ] D-1 root domain and wildcard on Vercel; D-9 email provider.
 - [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (Pro every 30 minutes, or Hobby daily).
-- [ ] Confirm `deposit_value` units (fixed = pesewas, percent = whole number).
+- [x] `deposit_value` units decided 2026-11-22: used only for percent (whole number); a fixed deposit comes from each room price.
 - [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
 - [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
 - [x] CI workflow left unchanged (product owner decision, in chat, 2026-11-22). The admin E2E suite is run manually with `npm run build` then `npm run test:e2e:admin`; CI does not run it.
@@ -490,7 +490,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 
 ### Tasks
 - [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
-- [ ] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit
+- [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
 - [ ] 3. Capacity with live reservations; public Available / Limited / Full indicator
 - [ ] 4. Approval RPC with the room-type lock
 - [ ] 5. Reject, waitlist, cancel, extend hold, confirm
@@ -508,11 +508,11 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [ ] 17. Staff review queue and hold timer
 - [ ] 18. E2E, accessibility, performance and acceptance review
 
-### Phase 3 decisions awaiting confirmation (proposed in chat 2026-11-22; none approved yet)
+### Phase 3 decisions (product owner, in chat, 2026-11-22: "Approve defaults")
 - D-3 holds (120 h, 1 extension, deposit paid = confirmed); D-4 indicator (Limited = 3 or fewer); D-5 no-show (7 days, Phase 4); D-7 refunds (Phase 5a); D-11 no Turnstile for now; D-14 gender off unless the first hostel separates rooms.
 - Staff may mark a hold confirmed with a reason until payments exist (Phase 5a); otherwise every hold expires.
 - Overlapping periods: check capacity by the busiest day. `booking_periods` allows overlaps, so a per-period count could sell one bed twice.
-- Deposit: `room_type_prices.deposit_minor` and `tenant_settings.deposit_value` conflict. Proposed: fixed = the room price's deposit; percent = whole-number percentage of the price.
+- Deposit: fixed = the room price's deposit (`room_type_prices.deposit_minor`); percent = whole-number percentage of the price (`tenant_settings.deposit_value`). This closes the Phase 2 open item on `deposit_value` units.
 - Student emails on submitted, approved, rejected, waitlisted and expired, with a staff warning if a send fails.
 - Hold-expiry schedule (every 15 minutes needs Vercel Pro); dev-only `embedded-postgres` and Lighthouse; house rules shown as plain text.
 
@@ -522,6 +522,16 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 1 | `npm test` (unit + db; new pgTAP 019 with 53 assertions; 001 updated to 20 tables) | 404/404 passed |
 | 2026-11-22 | 1 | Mutation checks: (a) own-request policy `using (true)`; (b) reservation read allowed to any member; (c) student note kept in audit | 019 failed each time, as expected; migration restored. A first version of (c) changed nothing because the note was still masked by a second rule, so it was redone |
 | 2026-11-22 | 1 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 2 | `npm test` (unit + db; new pgTAP 020 with 41 assertions) | 405/405 passed |
+| 2026-11-22 | 2 | Mutation checks: (a) email verification removed; (b) rate limit removed; (c) period status ignored; (d) retry lookup removed | 020 failed each time, as expected; migration restored |
+| 2026-11-22 | 2 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm run test:e2e:admin` | 0 problems / passed / succeeded / clean / 18/18 |
+
+### Task 2 notes
+- Migration `20261122160000_add_submit_booking_request.sql`: `public.submit_booking_request` (signed-in users only), `app.quote_deposit`, `app.generate_booking_reference`. Errors: 42501 not allowed, 22023 invalid choice, 23505 already has a live request, `AS429` too many requests.
+- A retry with the same key returns the original reference, including in a parallel race, and does not use up the limit of 5 per hour. The parallel path is exercised for real only in task 8, because PGlite has one connection.
+- Gender is stored only for hostels that enforce gendered rooms (D-14).
+- Booking rules screen: "Fixed" no longer asks for an amount and points to Inventory, Prices. **A hostel on "Fixed" with a GH₵ 0 deposit on a price quotes no deposit**, so prices must be checked during onboarding.
+- Staff-created walk-in requests (`bookings.create_on_behalf`) are not in this RPC or in the Phase 3 task list.
 
 ### Task 1 notes
 - Migration `20261122150000_create_booking_workflow.sql`. API roles can only read these tables; all writes come through RPCs in later tasks.

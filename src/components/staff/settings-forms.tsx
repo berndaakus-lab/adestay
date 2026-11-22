@@ -244,7 +244,7 @@ export function OperationalSettingsForm({ tenantSlug, settings, canEdit }: { ten
   const { state, pending, formProps } = useActionForm(updateOperationalSettings.bind(null, tenantSlug), initial);
   const [policy, setPolicy] = useState(settings.deposit_policy);
   const e = state.fieldErrors ?? {};
-  const storedDeposit = settings.deposit_policy === "fixed" ? (settings.deposit_value / 100).toFixed(2) : settings.deposit_policy === "percent" ? String(settings.deposit_value) : "";
+  const storedDeposit = settings.deposit_policy === "percent" ? String(settings.deposit_value) : "";
   return (
     <form {...formProps} className="flex flex-col gap-6" noValidate>
       <FormMessage state={state} />
@@ -265,20 +265,23 @@ export function OperationalSettingsForm({ tenantSlug, settings, canEdit }: { ten
               onValueChange={(value) => setPolicy(value as OperationalValues["deposit_policy"])}
               options={[
                 { value: "none", label: "No deposit" },
-                { value: "fixed", label: "Fixed amount" },
+                { value: "fixed", label: "Fixed amount per room price" },
                 { value: "percent", label: "Percentage of the price" },
                 { value: "full", label: "Full payment" },
               ]}
             />
-            {policy === "fixed" || policy === "percent" ? (
+            {policy === "percent" ? (
               <TextField
                 key={policy}
                 name="depositValue"
-                label={policy === "fixed" ? "Deposit amount (GH₵)" : "Deposit (%)"}
-                inputMode={policy === "fixed" ? "text" : "numeric"}
+                label="Deposit (%)"
+                inputMode="numeric"
                 defaultValue={policy === settings.deposit_policy ? storedDeposit : ""}
                 error={e.depositValue}
               />
+            ) : null}
+            {policy === "fixed" ? (
+              <p className="self-center text-sm text-muted-strong">Set the deposit for each room type and period under Inventory, Prices.</p>
             ) : null}
             <TextField name="minPaidPercentForCheckin" label="Paid before check-in (%)" inputMode="numeric" defaultValue={String(settings.min_paid_percent_for_checkin)} description="0 to 100." error={e.minPaidPercentForCheckin} />
           </div>

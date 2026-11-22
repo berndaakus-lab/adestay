@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { brandColorSchema } from "@/lib/brand-color";
-import { parseCedisToPesewas } from "@/lib/money";
 import { PERMISSIONS, type Permission } from "@/lib/permissions";
 import { normalizePhone } from "@/lib/phone";
 
@@ -96,14 +95,7 @@ export const operationalSettingsSchema = z
   })
   .transform((v, ctx) => {
     let depositValue = 0;
-    if (v.depositPolicy === "fixed") {
-      const pesewas = parseCedisToPesewas(v.depositValue);
-      if (pesewas === null || pesewas <= 0 || pesewas > 100_000_000) {
-        ctx.addIssue({ code: "custom", path: ["depositValue"], message: "Enter the deposit in cedis, e.g. 500.00" });
-        return z.NEVER;
-      }
-      depositValue = pesewas;
-    }
+    // A fixed deposit is set per room type and period on Prices (product owner, 2026-11-22).
     if (v.depositPolicy === "percent") {
       if (!/^\d{1,3}$/.test(v.depositValue) || Number(v.depositValue) < 1 || Number(v.depositValue) > 100) {
         ctx.addIssue({ code: "custom", path: ["depositValue"], message: "Enter a percentage from 1 to 100" });
