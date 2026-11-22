@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-3 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-4 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -492,7 +492,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
 - [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
 - [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` to be applied on hosted dev
-- [ ] 4. Approval RPC with the room-type lock
+- [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` to be applied on hosted dev
 - [ ] 5. Reject, waitlist, cancel, extend hold, confirm
 - [ ] 6. Hold expiry and closing requests when a period ends
 - [ ] 7. Booking lookup RPC (status only)
@@ -529,6 +529,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 3 | `npm test` (unit + db; new pgTAP 021 with 32 assertions) | 406/406 passed |
 | 2026-11-22 | 3 | Mutation checks: (a) overlapping bookings summed; (b) overdue holds counted; (c) Limited threshold changed; (d) unpublished room types listed; (e) staff permission removed | 021 failed each time, as expected; migration restored |
 | 2026-11-22 | 3 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 3 | **GitHub Actions CI** on `staging` (commit `292052c`) | Passed |
+| 2026-11-22 | 4 | `npm test` (unit + db; new pgTAP 022 with 28 assertions) | 407/407 passed |
+| 2026-11-22 | 4 | Mutation checks: (a) permission check removed; (b) capacity check removed; (c) status guard removed; (d) blocked student allowed; (e) hostel hold duration ignored | 022 failed each time, as expected; migration restored |
+| 2026-11-22 | 4 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 4 notes
+- Migration `20261122180000_add_approve_booking_request.sql`: `public.approve_booking_request(request_id)`, needs `bookings.review`. Errors: 42501 not allowed (also unknown ids), 55000 wrong state, `AS409` no capacity.
+- Permission is checked before any lock. Locks: request, then room type (ADR-0003). Availability is read in a later statement, so it sees holds committed by the approval that went first.
+- **Not yet proven:** PGlite has one connection, so these tests run approvals one after another. Acceptance criterion 2 (20 parallel approvals, exactly 1 succeeds) is task 8 on real Postgres.
+- Additions within the design: a blocked student or a period that has ended or is archived cannot be approved.
+- No invoice (Phase 5a) and no email yet (task 9).
 
 ### Task 3 notes
 - Migration `20261122170000_add_room_type_availability.sql`. `app.room_type_availability` is the single implementation for the approval RPC (task 4). `public.room_type_availability` gives staff exact figures (inventory or `bookings.read`). `public.room_type_availability_indicators` is public and returns only `available`, `limited` (3 or fewer) or `full`.
