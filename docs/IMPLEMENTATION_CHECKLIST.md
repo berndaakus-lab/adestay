@@ -258,6 +258,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | `sharp` | Approved as a direct dependency (EXIF stripping by re-encoding) |
 | Invites | Supabase `inviteUserByEmail` from the allow-listed provisioning module; membership `invited` → `active` on first sign-in with that email. Needs D-9 for addresses outside the Supabase team |
 | Room photos | Public `tenant-public` bucket (DATABASE_DESIGN §6); private bucket waits for Phase 5a |
+| Upload path (2026-11-22) | Staff member's own session + storage RLS; direct uploads that skip the server re-encode are an accepted risk, limited to the hostel's own folders, allowed names and declared image types |
 | D-9 email provider, D-1 root domain | Still open (Resend or Postmark recommended; D-1 needed for "subdomain live" in acceptance criterion 1) |
 
 ### Test results
@@ -284,6 +285,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-19 | 5 | `npm run test:db` (17 files; new pgTAP 013 with 25 assertions; 001 whitelist adds `can_manage_public_asset`) | 17/17 passed |
 | 2026-11-19 | 5 | Mutation checks: (a) "room type belongs to this hostel" changed from `and` to `or`; (b) server-generated name check removed | (a) 5 assertions failed, (b) 4 failed, as expected; migration restored |
 | 2026-11-19 | 5 | `npm test` (unit + db), `npm run lint`, `npm run typecheck` | 135/135 passed / 0 problems / passed |
+| 2026-11-19 | 5 | **GitHub Actions CI run 44637236559** on `staging` (commit `c04fe80`) | Passed |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -327,6 +329,6 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - `app.can_manage_public_asset` accepts only the server-generated shapes `{tenant_id}/branding/<8-64 [a-z0-9-]>.jpg|png|webp` (needs `settings.manage`) and `{tenant_id}/room-types/{room_type_id}/<name>` (needs `inventory.manage` and a room type of that hostel). Traversal, other folders, other extensions and malformed ids are refused before any uuid cast. Suspended hostels, break-glass and anon cannot write. Same path shapes as the `tenant_profiles` and `room_type_photos` constraints.
 - Public files are served by public URL; nobody but managers can **list** the bucket.
 - PGlite shim: minimal `storage.buckets`, `storage.objects` (RLS on, Supabase's default grants) and `storage.foldername`. Real storage behaviour (bucket limits enforced by the Storage API, policies applied to uploads) must be checked on staging once the upload UI exists (task 13).
-- **Residual risk for product-owner decision:** uploads use the staff member's own session (architecture: user JWT + RLS; no new service-role use). A staff member with `settings.manage`/`inventory.manage` could therefore upload directly to Supabase Storage with their session and skip the server's magic-byte check and EXIF-stripping re-encode (task 7), within their own hostel's folders, allowed names and declared image types. Alternative: no insert policy at all, and the server uploads with the service role from an allow-listed module after its own permission check (extends `SERVICE_ROLE_ALLOWLIST`, needs approval).
+- **Upload path decided by the product owner (in chat, 2026-11-22): keep the user session.** Uploads use the staff member's own session (architecture: user JWT + RLS; no new service-role use). **Accepted residual risk:** a staff member with `settings.manage`/`inventory.manage` could therefore upload directly to Supabase Storage with their session and skip the server's magic-byte check and EXIF-stripping re-encode (task 7), within their own hostel's folders, allowed names and declared image types. The server-only alternative (service-role upload from an allow-listed module) was considered and not chosen.
 - Hosted dev: `npm run db:bundle -- --since 20261114130000 --no-seed` once task 4 (`20261114130000`) is applied; otherwise `--since 20261114120000` (both migrations).
 - If the SQL Editor refuses `create policy … on storage.objects` (ownership), tell me; the policies can be created from Storage → Policies with the same expressions.
