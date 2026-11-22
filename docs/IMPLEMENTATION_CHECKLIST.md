@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-9 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-9 of 18 done locally; task 10 submission done, sign-in code limit awaiting a decision.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -498,7 +498,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 7. Booking lookup RPC (status only) — done locally (2026-11-22); migration `20261122220000` **not yet applied on hosted dev**
 - [x] 8. 20-parallel-approvals test on real Postgres — done locally (2026-11-22), run with `npm run test:db:parallel` (not in CI); fix migration `20261122230000` **not yet applied on hosted dev**
 - [x] 9. Booking email sender — done locally (2026-11-22), provider-neutral; **no email is delivered until D-9 is decided**; migration `20261122240000` **not yet applied on hosted dev**
-- [ ] 10. Student code sign-in limits and request submission actions
+- [~] 10. Student code sign-in limits and request submission actions — submission done locally (2026-11-22), no migration; **sign-in code limit awaits a product-owner decision** (task 10 notes)
 - [ ] 11. Rate-limited lookup action
 - [ ] 12. Staff review actions
 - [ ] 13. Secured hold-expiry job
@@ -559,6 +559,16 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 9 | `npm test` (new `booking-email` unit tests: 22; new pgTAP 026 with 17 assertions) | First run: 432 passed, 1 timed out (`formatDay`, an existing test that took over 5 s under load; 8 of 8 passed alone). Given a longer timeout, then 3 full runs: 433/433 |
 | 2026-11-22 | 9 | Mutation checks: (a) `residents.read` not required; (b) any student can read; (c) job function open to users; (d) HTML not escaped; (e) status guard removed; (f) header injection allowed | Tests failed each time, as expected; files restored |
 | 2026-11-22 | 9 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm run test:db:parallel` | 0 problems / passed / succeeded / clean / 8/8 |
+| 2026-11-22 | 9 | **GitHub Actions CI** on `staging` (commit `93e914e`) | Passed |
+| 2026-11-22 | 10 | `npm test` (new `booking-actions` tests: 32) | 465/465 passed |
+| 2026-11-22 | 10 | Mutation checks: (a) hostel taken from the form; (b) sign-in check removed; (c) retry emails again; (d) suspended hostel allowed; (e) raw database text shown | 1 test failed each time, as expected; file restored |
+| 2026-11-22 | 10 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+
+### Task 10 notes
+- `src/lib/validation/booking.ts` and `src/lib/server/actions/booking-actions.ts` (`submitBookingRequest`). The hostel comes from `getSiteTenant`, never the form. The RPC runs with the student's session.
+- Returns the reference, plus `emailSent: false` when the booking is saved but the email did not go out (always the case until D-9). A retry returns the same reference and does not email again. Task 15 must show the reference whatever the email result.
+- Blocked, unverified and unavailable all get the same message. Only known RPC messages are mapped to form fields; raw database text is never shown.
+- **Open decision, sign-in code limit (SECURITY_THREAT_MODEL §5: 5 per hour per email).** Not built. An app-level counter needs either a new service-role module (the allow-list requires product-owner approval) or a public RPC, which would let anyone use up a student's limit. It also cannot be the real control: the public anon key can call Supabase Auth directly and skip our form. Recommended: rely on Supabase Auth's rate limits, configured in the dashboard, and record the change to §5.
 
 ### Task 9 notes
 - `src/lib/server/email/`: `send.ts` (provider-neutral transport and header safety), `booking-templates.ts` (text and escaped HTML for submitted, approved, rejected, waitlisted, lapsed), `booking-email.ts` (`sendBookingEmail`, never throws, returns `sent`, `not_configured` or `failed`).
