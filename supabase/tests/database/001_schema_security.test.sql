@@ -13,8 +13,8 @@ select is(
 select is(
   (select count(*)::int from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r'),
-  18,
-  'exactly the 18 expected public tables (Phase 1: 11, Phase 2 inventory: 7)'
+  20,
+  'exactly the 20 expected public tables (Phase 1: 11, Phase 2 inventory: 7, Phase 3 booking: 2)'
 );
 
 select has_table('public', 'tenants', 'tenants exists');
@@ -42,11 +42,11 @@ select is(
 
 -- Signed-in users can never write directly to workflow and history tables (RPC only).
 select is(
-  (select coalesce(array_agg(t order by t), '{}') from unnest(array['residents', 'tenant_memberships', 'audit_logs', 'platform_admins']) t
+  (select coalesce(array_agg(t order by t), '{}') from unnest(array['residents', 'tenant_memberships', 'audit_logs', 'platform_admins', 'booking_requests', 'reservations']) t
    where has_table_privilege('authenticated', 'public.' || t, 'insert,update,delete,truncate')
       or has_any_column_privilege('authenticated', 'public.' || t, 'insert,update')),
   '{}'::text[],
-  'authenticated cannot write residents, memberships, audit logs or platform admins directly'
+  'authenticated cannot write residents, memberships, audit logs, platform admins or booking tables directly'
 );
 
 -- Sensitive resident columns are not readable through normal queries.

@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | Not started | — |
+| 3: Public sites & Booking | **In progress: task 1 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults not yet confirmed (see "Phase 3 decisions awaiting confirmation") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -483,3 +483,51 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
 - [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
 - [x] CI workflow left unchanged (product owner decision, in chat, 2026-11-22). The admin E2E suite is run manually with `npm run build` then `npm run test:e2e:admin`; CI does not run it.
+
+## Phase 3: Public websites & Booking (started 2026-11-22)
+
+Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 remains not signed off; its open items above still apply.
+
+### Tasks
+- [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
+- [ ] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit
+- [ ] 3. Capacity with live reservations; public Available / Limited / Full indicator
+- [ ] 4. Approval RPC with the room-type lock
+- [ ] 5. Reject, waitlist, cancel, extend hold, confirm
+- [ ] 6. Hold expiry and closing requests when a period ends
+- [ ] 7. Booking lookup RPC (status only)
+- [ ] 8. 20-parallel-approvals test on real Postgres
+- [ ] 9. Booking email sender
+- [ ] 10. Student code sign-in limits and request submission actions
+- [ ] 11. Rate-limited lookup action
+- [ ] 12. Staff review actions
+- [ ] 13. Secured hold-expiry job
+- [ ] 14. Branded home, room list and detail, policies and contact pages
+- [ ] 15. Mobile-first booking form and confirmation page
+- [ ] 16. Booking lookup page
+- [ ] 17. Staff review queue and hold timer
+- [ ] 18. E2E, accessibility, performance and acceptance review
+
+### Phase 3 decisions awaiting confirmation (proposed in chat 2026-11-22; none approved yet)
+- D-3 holds (120 h, 1 extension, deposit paid = confirmed); D-4 indicator (Limited = 3 or fewer); D-5 no-show (7 days, Phase 4); D-7 refunds (Phase 5a); D-11 no Turnstile for now; D-14 gender off unless the first hostel separates rooms.
+- Staff may mark a hold confirmed with a reason until payments exist (Phase 5a); otherwise every hold expires.
+- Overlapping periods: check capacity by the busiest day. `booking_periods` allows overlaps, so a per-period count could sell one bed twice.
+- Deposit: `room_type_prices.deposit_minor` and `tenant_settings.deposit_value` conflict. Proposed: fixed = the room price's deposit; percent = whole-number percentage of the price.
+- Student emails on submitted, approved, rejected, waitlisted and expired, with a staff warning if a send fails.
+- Hold-expiry schedule (every 15 minutes needs Vercel Pro); dev-only `embedded-postgres` and Lighthouse; house rules shown as plain text.
+
+### Test results
+| Date | Task | Command | Result |
+|---|---|---|---|
+| 2026-11-22 | 1 | `npm test` (unit + db; new pgTAP 019 with 53 assertions; 001 updated to 20 tables) | 404/404 passed |
+| 2026-11-22 | 1 | Mutation checks: (a) own-request policy `using (true)`; (b) reservation read allowed to any member; (c) student note kept in audit | 019 failed each time, as expected; migration restored. A first version of (c) changed nothing because the note was still masked by a second rule, so it was redone |
+| 2026-11-22 | 1 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 1 notes
+- Migration `20261122150000_create_booking_workflow.sql`. API roles can only read these tables; all writes come through RPCs in later tasks.
+- A reservation's foreign key includes the request's room type and period, so a hold cannot differ from its request.
+- Parent keys use NO ACTION instead of RESTRICT: a period, room type or resident with bookings cannot be deleted, but deleting a whole hostel still cascades.
+- `reservations_live_idx` includes `fulfilled` (DATABASE_DESIGN lists held and confirmed) because the capacity rule in BOOKING_AND_PAYMENT_FLOWS §3 counts it. `released` is kept from DATABASE_DESIGN although the state diagram does not use it.
+- `app.redact_for_audit` now masks `student_note` and drops `idempotency_key`.
+- `decision_reason` is readable by the student through their own row, so the review screen (task 17) must say so.
+- Hosted dev: the next bundle is still `npm run db:bundle -- --since 20261114120000 --no-seed` and now includes this migration.
