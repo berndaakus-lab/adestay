@@ -296,6 +296,8 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 6 | `npm run lint`, `npm run typecheck`, `npm run build` | 0 problems / passed / succeeded |
 | 2026-11-22 | 6 | `npm audit --omit=dev --audit-level=high` | No high/critical; 1 **moderate** advisory group on `next` 16.0.0-16.4.4 (installed 16.4.3; fix in later 16.4.x) |
 | 2026-11-22 | 6 | PGlite probe: active hostel admin with an **aal1** JWT inserts into `room_types` | **Write succeeded: open security finding, see task 6 notes** |
+| 2026-11-22 | security | `next` and `eslint-config-next` upgraded 16.4.3 → 16.4.6: `npm audit --omit=dev` | 0 vulnerabilities (full `npm audit` still reports 10 moderate, all in dev dependencies; not changed here) |
+| 2026-11-22 | security | After the upgrade: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | passed / passed / 209/209 / succeeded / clean (22 files, 3 checks) / 30/30 |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -353,6 +355,6 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Room photo rows are not here: they are created with the upload pipeline (task 7). Profile and settings actions come with their UI (task 12).
 - No browser or hosted test yet: the actions have no screens until task 13.
 
-### Open security findings (found 2026-11-22, not fixed)
+### Open security findings (found 2026-11-22, not fixed unless marked `[x]`)
 - **Hostel-admin MFA is enforced only in the app, not in the database.** `app.has_permission`, `app.is_hostel_admin` and `app.is_tenant_member` do not check `aal`. A hostel admin who has only their password (aal1 session) can call the Supabase API directly with the public anon key and read or write whatever their role allows. Confirmed in PGlite with an insert into `room_types`. Conflicts with SECURITY_THREAT_MODEL T4 and ADR-0002 ("MFA required for hostel admins"). Platform admins are not affected (`app.is_platform_admin` requires aal2).
-- **`next` 16.4.3 has moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed in a later 16.4.x; not upgraded yet.
+- [x] **`next` 16.4.3 had moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed 2026-11-22 by upgrading to 16.4.6 (security fixes landed in 16.4.5). The 16.4.6 docs require no change to `src/proxy.ts` or `next.config.ts`.
