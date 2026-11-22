@@ -74,7 +74,7 @@ None. This phase is documentation only. No application code, migrations or depen
 ### Blockers / needs from product owner
 - [x] Hosted Supabase dev project created; keys are in Vercel environment variables (product owner, 2026-10-26).
 - [ ] **Apply migrations to the hosted dev project** the same way as ugs-kitchen-v2 (product owner decision, 2026-10-26): `npm run db:bundle` writes `supabase/.temp/apply-all.sql` (all migrations + dev seed, gitignored); the product owner pastes it into the Supabase SQL Editor and runs it once. Later migrations: `npm run db:bundle -- --since <last applied timestamp> --no-seed`. Record the last applied migration here after each run.
-- Last migration applied to hosted dev: **`20261114120000_add_staff_and_profile_admin.sql`** (product owner, SQL Editor, 2026-11-14, file with only that migration; applied without errors). Before that, confirmed 2026-11-14 with a catalog query: 20261104100000, 20261104120000, 20261114100000 (complete) and 20261114110000 present; 20261114120000 absent). A re-run of a bundle that included 20261114110000 failed with 42723 "function room_type_capacity already exists" and changed nothing. **Next bundle: `npm run db:bundle -- --since 20261114120000 --no-seed`.** Earlier: `20261026160000_add_server_access_rpcs.sql` (inferred 2026-11-04). Before that: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
+- Last migration applied to hosted dev: **`20261122190000_add_booking_staff_decisions.sql`** (product owner, SQL Editor, 2026-11-22; read-only catalog check showed all 12 migrations after `20261114120000` as applied). **Next bundle: `npm run db:bundle -- --since 20261122190000 --no-seed`.** A first bundle from `20261114120000` failed on its first statement with 42704 and changed nothing, because `20261114130000` through `20261122110000` were already applied but not recorded here. Earlier: `20261114120000_add_staff_and_profile_admin.sql` (product owner, SQL Editor, 2026-11-14, file with only that migration; applied without errors). Before that, confirmed 2026-11-14 with a catalog query: 20261104100000, 20261104120000, 20261114100000 (complete) and 20261114110000 present; 20261114120000 absent). A re-run of a bundle that included 20261114110000 failed with 42723 "function room_type_capacity already exists" and changed nothing. Earlier: `20261026160000_add_server_access_rpcs.sql` (inferred 2026-11-04). Before that: `20261026150000_add_authorization_helpers_and_rls.sql` (product owner, SQL Editor, 2026-10-26; check `residents_select` policy exists → true). Earlier: migrations 20261026130000-130300 + dev seed. `postgres` bypasses RLS: confirmed true.
 - [ ] For local runs of the app against the hosted project (from task 5): `vercel env pull .env.local` or create `.env.local` manually.
 - [ ] **Task 6 hosted setup (product owner, Supabase dashboard)** — see DEPLOYMENT_AND_OPERATIONS §3a: URL configuration (Site URL + `/auth/callback` redirect URLs), minimum password length 12, TOTP MFA enabled, Magic Link email template shows `{{ .Token }}`, OTP expiry 600 s. Then apply migrations `20261026160000` and `20261104100000`, create demo accounts and run `supabase/dev/link-demo-users.sql`.
 - [ ] **D-9 email provider** needed before students outside the Supabase team can receive codes: Supabase's built-in email only delivers to project team members and is heavily rate-limited.
@@ -237,13 +237,13 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 1. Inventory tables: booking_periods, room_types, room_type_photos, rooms, beds, bed_blocks, room_type_prices; composite FKs, constraints, audit, RLS (staff + anon published content); pgTAP — done locally (2026-11-14); migration `20261114100000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 2. Sellable capacity per room type × period (active beds in active rooms minus overlapping blocks); pgTAP — done locally (2026-11-14); migration `20261114110000` applied on hosted dev (confirmed 2026-11-14)
 - [x] 3. Admin RPCs: memberships (invite, change role, revoke; no self-change, no granting unheld permissions, last-admin guard), custom permission sets, profile/settings updates (brand colour contrast); pgTAP — done locally (2026-11-14); migration `20261114120000` applied on hosted dev (2026-11-14)
-- [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` to be applied on hosted dev
-- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` to be applied on hosted dev
+- [x] 4. Platform RPCs: create tenant (tenant, profile, settings, subdomain; onboarding → active), suspend/restore, domains; aal2; pgTAP — done locally (2026-11-14); migration `20261114130000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 5. Storage bucket `tenant-public` + storage RLS (tenant folder, permission, MIME, size); PGlite storage shim — done locally (2026-11-19); migrations `20261119100000` and `20261122100000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 6. Zod schemas + server actions for inventory and pricing; brand-colour contrast validator — done locally (2026-11-22); no migration
 - [x] 7. Upload pipeline (server-only, `src/lib/server/uploads`): user-session permission check, magic bytes, no SVG, ≤ 5 MB, re-encode with `sharp` (EXIF stripped), server-generated paths, service-role upload; polyglot tests — done locally (2026-11-22); needs hosted migrations `20261119100000` and `20261122100000`
-- [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
-- [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
-- [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
+- [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` applied on hosted dev (confirmed 2026-11-22); Invite user email template still to be set
+- [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` applied on hosted dev (confirmed 2026-11-22); schedule, token and real domain test open
 - [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [x] 12. Hostel admin UI: profile/branding, settings, staff and permission sets — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [x] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import — done locally (2026-11-22); not yet exercised against hosted Supabase
@@ -393,7 +393,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 
 ### Open security findings (found 2026-11-22, not fixed unless marked `[x]`)
 - [x] **`next` 16.4.3 had moderate advisories** (including Cache Components cache disclosure/poisoning, and this project uses Cache Components). Fixed 2026-11-22 by upgrading to 16.4.6 (security fixes landed in 16.4.5). The 16.4.6 docs require no change to `src/proxy.ts` or `next.config.ts`.
-- [x] **Hostel-admin MFA was enforced only in the app (fixed locally 2026-11-22).** Migration `20261122110000_enforce_admin_mfa_in_database.sql` adds `app.caller_meets_mfa_policy()` to `is_tenant_member`, `is_hostel_admin` and `has_permission`: an active hostel admin of an active hostel, or a platform-admin account, holds no staff access in any hostel until aal2. `my_memberships` stays readable at aal1 so the app can route them to MFA; their own resident record is unaffected. **To apply on hosted dev.**
+- [x] **Hostel-admin MFA was enforced only in the app (fixed locally 2026-11-22).** Migration `20261122110000_enforce_admin_mfa_in_database.sql` adds `app.caller_meets_mfa_policy()` to `is_tenant_member`, `is_hostel_admin` and `has_permission`: an active hostel admin of an active hostel, or a platform-admin account, holds no staff access in any hostel until aal2. `my_memberships` stays readable at aal1 so the app can route them to MFA; their own resident record is unaffected. Applied on hosted dev (confirmed 2026-11-22).
 - [ ] **Not covered by that fix:** ordinary staff who enrolled TOTP voluntarily. The app demands their code, but the database still accepts their aal1 session, within their permission set.
 
 ### Task 7 notes
@@ -467,7 +467,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 ### Phase 2 acceptance criteria (IMPLEMENTATION_PLAN §2)
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| 1 | Onboard a tenant end to end in under 10 minutes on staging: subdomain live, admin invited | **Not met yet** | Flow works locally (pgTAP 018, E2E). Never run on staging or timed. Needs hosted migrations, the Invite user template, D-1 (subdomain) and D-9 for addresses outside the Supabase team |
+| 1 | Onboard a tenant end to end in under 10 minutes on staging: subdomain live, admin invited | **Not met yet** | Flow works locally (pgTAP 018, E2E). Never run on staging or timed. Hosted migrations are applied; still needs the Invite user template, D-1 (subdomain) and D-9 for addresses outside the Supabase team |
 | 2 | Model 50 beds and see correct sellable capacity per room type × period | **Met locally; hosted check pending** | pgTAP 010, 016, 018 on real SQL; E2E through the screens |
 | 3 | Brand colour rejects contrast below 4.5:1 | **Met** | Database constraint (pgTAP 011, 018), form rule compared with SQL (`tests/db/brand-color.test.ts`), E2E |
 | 4 | Uploads reject non-image, SVG and > 5 MB, and strip EXIF | **Met locally; real Storage pending** | `tests/unit/image-processing.test.ts` with real `sharp`, upload action tests, pgTAP 013, E2E |
@@ -475,7 +475,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 6 | Isolation and RBAC tests extended to all new tables; all pass | **Met** (database level) | pgTAP 001, 009-018 as `anon`/`authenticated` with JWT claims; not yet repeated over HTTP against the hosted project |
 
 ### Open before Phase 2 sign-off (product owner)
-- [ ] Apply pending migrations on hosted dev (last confirmed: `20261114120000`; latest: `20261122140000`).
+- [x] Apply pending migrations on hosted dev (confirmed through `20261122190000` on 2026-11-22).
 - [ ] Set the Invite user email template (DEPLOYMENT_AND_OPERATIONS §3a).
 - [ ] D-1 root domain and wildcard on Vercel; D-9 email provider.
 - [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (Pro every 30 minutes, or Hobby daily).
@@ -489,11 +489,11 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 remains not signed off; its open items above still apply.
 
 ### Tasks
-- [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` to be applied on hosted dev
-- [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` to be applied on hosted dev
-- [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` to be applied on hosted dev
-- [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` to be applied on hosted dev
-- [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` to be applied on hosted dev
+- [x] 1. Booking tables: `booking_requests`, `reservations`; constraints, audit, read-only RLS; pgTAP — done locally (2026-11-22); migration `20261122150000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 2. Request submission RPC: student details, reference, price snapshot, idempotency, rate limit — done locally (2026-11-22); migration `20261122160000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 3. Capacity with live reservations; public Available / Limited / Full indicator — done locally (2026-11-22); migration `20261122170000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` applied on hosted dev (confirmed 2026-11-22)
+- [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` applied on hosted dev (confirmed 2026-11-22)
 - [ ] 6. Hold expiry and closing requests when a period ends
 - [ ] 7. Booking lookup RPC (status only)
 - [ ] 8. 20-parallel-approvals test on real Postgres
@@ -573,4 +573,4 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - `reservations_live_idx` includes `fulfilled` (DATABASE_DESIGN lists held and confirmed) because the capacity rule in BOOKING_AND_PAYMENT_FLOWS §3 counts it. `released` is kept from DATABASE_DESIGN although the state diagram does not use it.
 - `app.redact_for_audit` now masks `student_note` and drops `idempotency_key`.
 - `decision_reason` is readable by the student through their own row, so the review screen (task 17) must say so.
-- Hosted dev: the next bundle is still `npm run db:bundle -- --since 20261114120000 --no-seed` and now includes this migration.
+- Hosted dev: applied 2026-11-22 (see "Last migration applied").
