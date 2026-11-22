@@ -29,7 +29,6 @@ async function Workspace({ params, children }: { params: LayoutProps<"/t/[tenant
       roleLabel={access.role === "hostel_admin" ? "Hostel admin" : "Staff"}
       userEmail={user.email}
       nav={visibleStaffNav(access)}
-      current=""
       canSwitchHostel={memberships.length > 1}
     >
       {children}

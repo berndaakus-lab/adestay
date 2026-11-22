@@ -245,7 +245,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
 - [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
 - [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
-- [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
+- [x] 12. Hostel admin UI: profile/branding, settings, staff and permission sets — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
 - [ ] 14. E2E + axe (desktop, 360 px), acceptance review
 
@@ -323,6 +323,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 10 | **GitHub Actions CI run 45001158642** on `staging` (commit `dac321f`) | Passed |
 | 2026-11-22 | 11 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: list, wizard, validation, create, resend, activate, domain add, manual status, primary, suspend, restore, bad id | 30/30 flow checks passed; axe WCAG 2.2 AA 0 violations on 12 page states; no horizontal overflow; controls ≥ 44 px; no console errors |
 | 2026-11-22 | 11 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 346/346 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 11 | **GitHub Actions CI run 45003738657** on `staging` (commit `ef82986`) | Passed |
+| 2026-11-22 | 12 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: admin, manager (read-only), front desk (no access), admin without MFA; profile, colours, real image uploads incl. a photo over 4 MB, booking rules, team, permission sets | 60/60 flow checks passed; axe WCAG 2.2 AA 0 violations; no horizontal overflow; controls ≥ 44 px |
+| 2026-11-22 | 12 | Mutation checks: (a) `settings.read` allowed to edit; (b) system-set guard removed | 1 test failed each, as expected; file restored |
+| 2026-11-22 | 12 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 389/389 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -429,3 +433,13 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - **Found by the browser check and fixed:** React clears a form after its action runs, so typed values were lost on a validation error (`useActionForm` prevents this); the status dialog kept its state across a status change; invalid `dl` markup for DNS records; a logo link whose accessible name did not match its text; Next's validation flagged the auth library's `Date.now()` (`createSupabaseServerClient` now calls `connection()`).
 - The fake API was a local check only and is not committed. It proves the screens and actions work together, **not** real RLS, Auth or email. Task 14 should turn this into a committed E2E setup.
 - **Acceptance criterion 1 (onboard in under 10 minutes on staging) is not yet measured:** it needs the hosted migrations, the Invite user template, D-9 for non-team addresses, and D-1 for "subdomain live".
+
+### Task 12 notes
+- `/t/{slug}/settings`: **Profile** (logo, main photo, details, brand colours with a live contrast check, contact, rules, publish), **Booking rules** (hold, extensions, deposit, check-in threshold, student details), **Team** (invite, resend, change role, remove) and **Permission sets** (built-in sets read-only; create from a template, edit, delete).
+- Access: Profile for anyone with `settings.read`, `settings.manage` or `staff.manage`; Booking rules need `settings.read` or `settings.manage`; Team and Permission sets need `staff.manage` (hostel admins). `settings.read` alone gets read-only forms. Everyone else gets a 404. Every page repeats the session + MFA, membership and permission check.
+- `src/lib/server/actions/settings-actions.ts`: profile, booking rules and custom permission sets. `tenant_id` comes from the membership. `booking_requires_verified_email` is deliberately not editable (D-2), and neither are late fees (Phase 5) or the time zone.
+- **Interpretation to confirm:** `tenant_settings.deposit_value` is stored in pesewas for a fixed deposit and as a whole percentage for a percent deposit. The design names the column without a unit.
+- Images over 4 MB are shrunk in the browser before upload (`src/lib/prepare-image.ts`) because of the Vercel request limit noted in task 7. The server still validates and re-encodes everything.
+- The workspace menu now marks the current section, and Settings is no longer "Soon".
+- Brand colours, logo and main photo are stored but the public site does not display them yet (Phase 3).
+- The fake API was a local check only and is not committed. It does not prove real RLS, Storage, Auth or email. In development Next logs an "instant validation" message on pages that deliberately redirect or return 404; it does not appear as a page error.

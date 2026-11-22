@@ -25,7 +25,7 @@ export const STAFF_NAV: StaffNavItem[] = [
   { label: "Payments", path: "/payments", group: "Operations", anyOf: ["finance.read"], comingIn: "Phase 5" },
   { label: "Maintenance", path: "/maintenance", group: "Operations", anyOf: ["maintenance.read"], comingIn: "Phase 6" },
   { label: "Reports", path: "/reports", group: "Operations", anyOf: ["reports.read"], comingIn: "Phase 6" },
-  { label: "Settings", path: "/settings", group: "Operations", anyOf: ["settings.read", "settings.manage", "staff.manage"], comingIn: "Phase 2" },
+  { label: "Settings", path: "/settings", group: "Operations", anyOf: ["settings.read", "settings.manage", "staff.manage"] },
 ];
 
 export function visibleStaffNav(access: TenantAccess): StaffNavItem[] {

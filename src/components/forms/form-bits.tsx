@@ -23,9 +23,16 @@ export interface ActionFormState {
 export function useActionForm<S extends ActionFormState>(
   action: (prev: S, formData: FormData) => Promise<S>,
   initial: S,
-  options: { resetOnSuccess?: boolean; onSuccess?: (state: S) => void } = {},
+  options: {
+    resetOnSuccess?: boolean;
+    onSuccess?: (state: S) => void;
+    /** Runs in the browser before sending; may change the form data. Returns a field error for `file`. */
+    prepare?: (formData: FormData) => Promise<string | null>;
+  } = {},
 ) {
   const ref = useRef<HTMLFormElement>(null);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [state, formAction, pending] = useActionState<ActionFormState, FormData>(async (previous, formData) => {
     const next = await action(previous as S, formData);
     if (next.status === "success") {
@@ -34,12 +41,23 @@ export function useActionForm<S extends ActionFormState>(
     }
     return next;
   }, initial);
-  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    setPrepareError(null);
+    if (options.prepare) {
+      setPreparing(true);
+      const error = await options.prepare(formData);
+      setPreparing(false);
+      if (error) {
+        setPrepareError(error);
+        return;
+      }
+    }
     startTransition(() => formAction(formData));
   };
-  return { state: state as S, pending, formProps: { ref, action: formAction, onSubmit } };
+  const shown = prepareError ? ({ status: "error", fieldErrors: { file: prepareError } } as ActionFormState) : state;
+  return { state: shown as S, pending: pending || preparing, formProps: { ref, action: formAction, onSubmit } };
 }
 
 export function FormMessage({ state }: { state: ActionFormState }) {
@@ -89,8 +107,9 @@ export function SelectField(props: {
   options: readonly { value: string; label: string }[];
   defaultValue?: string;
   error?: string;
+  onValueChange?: (value: string) => void;
 }) {
-  const { name, label, options, defaultValue, error } = props;
+  const { name, label, options, defaultValue, error, onValueChange } = props;
   const id = `${useId()}-${name}`;
   return (
     <Field data-invalid={error ? true : undefined}>
@@ -99,6 +118,7 @@ export function SelectField(props: {
         id={id}
         name={name}
         defaultValue={defaultValue}
+        onChange={onValueChange ? (event) => onValueChange(event.target.value) : undefined}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className="h-11 w-full rounded-sm border border-input bg-card px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
