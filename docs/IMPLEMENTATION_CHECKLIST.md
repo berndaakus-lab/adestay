@@ -482,4 +482,4 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [ ] Confirm `deposit_value` units (fixed = pesewas, percent = whole number).
 - [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
 - [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
-- [ ] Add the admin E2E step to `.github/workflows/ci.yml` (needs a GitHub login with the `workflow` scope).
+- [x] CI workflow left unchanged (product owner decision, in chat, 2026-11-22). The admin E2E suite is run manually with `npm run build` then `npm run test:e2e:admin`; CI does not run it.
