@@ -23,7 +23,7 @@ async function PlatformFrame({ children }: { children: ReactNode }) {
     <div className="flex min-h-full flex-1 flex-col">
       <header className="bg-forest-deep text-white">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 md:px-10">
-          <Link href="/platform" aria-label="Platform overview">
+          <Link href="/platform">
             <Logo inverse name="AdeStay" tagline="Platform administration" />
           </Link>
           <div className="flex items-center gap-3">

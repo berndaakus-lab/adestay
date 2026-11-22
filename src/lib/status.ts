@@ -81,3 +81,12 @@ export const tenantStatus = {
   suspended: { label: "Suspended", tone: "danger" },
   archived: { label: "Archived", tone: "neutral" },
 } as const satisfies Record<TenantStatus, StatusStyle>;
+
+export type DomainStatus = "pending" | "verified" | "failed" | "removed";
+
+export const domainStatus = {
+  pending: { label: "Waiting for DNS", tone: "warning" },
+  verified: { label: "Verified", tone: "success" },
+  failed: { label: "Failed", tone: "danger" },
+  removed: { label: "Removed", tone: "neutral" },
+} as const satisfies Record<DomainStatus, StatusStyle>;

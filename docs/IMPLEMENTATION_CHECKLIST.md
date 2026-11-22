@@ -244,7 +244,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] 8. Provisioning module: tenant wizard action, first-admin invite; staff invite + accept flow — done locally (2026-11-22); migration `20261122120000` and the Invite user email template to be set on hosted dev
 - [x] 9. CSV import of rooms/beds: strict parser, dry-run preview, one-transaction RPC, ≤ 500 rows — done locally (2026-11-22); migration `20261122130000` to be applied on hosted dev
 - [x] 10. Custom domains: Vercel Domains API client + verification cron; manual status fallback without a token — done locally (2026-11-22); migration `20261122140000` to be applied on hosted dev; schedule, token and real domain test open
-- [ ] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite)
+- [x] 11. Platform UI: tenant wizard, tenant detail (status, domains, admin invite) — done locally (2026-11-22); not yet exercised against hosted Supabase
 - [ ] 12. Hostel admin UI: profile/branding, settings, staff and permission sets
 - [ ] 13. Inventory UI: periods, room types + photos, rooms/beds, blocks, prices, capacity table, CSV import
 - [ ] 14. E2E + axe (desktop, 360 px), acceptance review
@@ -320,6 +320,9 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 | 2026-11-22 | 10 | Mutation checks: (a) any bearer accepted; (b) DNS state ignored; (c) job may change live domains | 2 tests, 1 test and 4 assertions failed, as expected; files restored |
 | 2026-11-22 | 10 | Live production server, `/api/cron/verify-domains`: no header, wrong secret, right secret | 401 / 401 / 200 `skipped: vercel_not_configured` |
 | 2026-11-22 | 10 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
+| 2026-11-22 | 10 | **GitHub Actions CI run 45001158642** on `staging` (commit `dac321f`) | Passed |
+| 2026-11-22 | 11 | Real pages in Chromium (desktop 1280 px, phone 360 px) against a throwaway fake Supabase API with made-up data: list, wizard, validation, create, resend, activate, domain add, manual status, primary, suspend, restore, bad id | 30/30 flow checks passed; axe WCAG 2.2 AA 0 violations on 12 page states; no horizontal overflow; controls ≥ 44 px; no console errors |
+| 2026-11-22 | 11 | `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test`, `npm audit --omit=dev` | 346/346 / 0 problems / passed / succeeded / clean / 30/30 / 0 vulnerabilities |
 
 ### Task 1 notes
 - Migration `20261114100000_create_inventory_and_pricing.sql`. Every table: `tenant_id`, `unique (tenant_id, id)`, composite FKs to parents, RLS enabled and forced, `updated_at` and row-change audit triggers.
@@ -419,3 +422,10 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - Migration `20261122140000_add_domain_check_recording.sql`: `public.record_domain_check`, service role only. It can only move a non-primary custom domain that is pending or failed, so a DNS or API problem cannot take a live site offline.
 - **No `vercel.json` schedule was added** (the product owner manages Vercel). Vercel runs crons on production deployments only, and on Hobby a schedule more frequent than daily fails the deployment. Decision needed: daily on any plan, or every 30 minutes on Pro as SYSTEM_ARCHITECTURE §6 assumes.
 - **Product owner, Vercel:** `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET` (16+ characters). Redeploy after setting them.
+
+### Task 11 notes
+- `/platform`: hostel list (cards on phones, table from 768 px) with "Add a hostel". `/platform/hostels/new`: three-step form on one page (hostel, web address + reference prefix, first admin). `/platform/hostels/{id}`: status with reason dialogs (activate, suspend, restore), onboarding next steps, hostel admin invitations with Resend, web addresses with DNS records, Check now (Vercel connected) or manual status (not connected), make primary, remove.
+- `src/components/forms/form-bits.tsx`: shared `useActionForm`, `FormMessage`, `TextField`, `SelectField` and `ReasonDialog` for tasks 12 and 13.
+- **Found by the browser check and fixed:** React clears a form after its action runs, so typed values were lost on a validation error (`useActionForm` prevents this); the status dialog kept its state across a status change; invalid `dl` markup for DNS records; a logo link whose accessible name did not match its text; Next's validation flagged the auth library's `Date.now()` (`createSupabaseServerClient` now calls `connection()`).
+- The fake API was a local check only and is not committed. It proves the screens and actions work together, **not** real RLS, Auth or email. Task 14 should turn this into a committed E2E setup.
+- **Acceptance criterion 1 (onboard in under 10 minutes on staging) is not yet measured:** it needs the hosted migrations, the Invite user template, D-9 for non-team addresses, and D-1 for "subdomain live".
