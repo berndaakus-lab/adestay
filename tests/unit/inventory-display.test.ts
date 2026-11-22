@@ -18,7 +18,8 @@ describe("parseDayRange", () => {
 });
 
 describe("formatDay", () => {
-  it("does not shift the calendar day", () => {
+  // The first locale lookup can take over 5 s while the database tests load the machine.
+  it("does not shift the calendar day", { timeout: 30_000 }, () => {
     expect(formatDay("2026-09-01")).toBe("1 Sept 2026".replace("Sept", new Date("2026-09-01T00:00:00Z").toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" })));
   });
 });

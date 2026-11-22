@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-8 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-9 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -497,7 +497,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 6. Hold expiry; requests stay with staff when a booking window closes — done locally (2026-11-22); migrations `20261122200000` and `20261122210000` **not yet applied on hosted dev**
 - [x] 7. Booking lookup RPC (status only) — done locally (2026-11-22); migration `20261122220000` **not yet applied on hosted dev**
 - [x] 8. 20-parallel-approvals test on real Postgres — done locally (2026-11-22), run with `npm run test:db:parallel` (not in CI); fix migration `20261122230000` **not yet applied on hosted dev**
-- [ ] 9. Booking email sender
+- [x] 9. Booking email sender — done locally (2026-11-22), provider-neutral; **no email is delivered until D-9 is decided**; migration `20261122240000` **not yet applied on hosted dev**
 - [ ] 10. Student code sign-in limits and request submission actions
 - [ ] 11. Rate-limited lookup action
 - [ ] 12. Staff review actions
@@ -555,6 +555,19 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 8 | Same command after migration `20261122230000`, 4 runs | 8/8 passed each time. Includes criterion 2 (20 parallel approvals, 1 bed left, 10 rounds: exactly 1 succeeded, 19 got no capacity) and criterion 3 (20 parallel submits, one reference) |
 | 2026-11-22 | 8 | Mutation checks: (a) room-type lock removed; (b) request lock removed; (c) submission lock removed; (d) expiry waits instead of skipping | 3, 1, 1 and 3 tests failed, as expected; files restored |
 | 2026-11-22 | 8 | Clean `npm ci`, `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, `npm run check:bundle`, `npm audit --omit=dev --audit-level=high` | Passed / passed / 0 problems / 410/410 / succeeded / clean / 0 vulnerabilities |
+| 2026-11-22 | 8 | **GitHub Actions CI** on `staging` (commit `24d619c`) | Passed |
+| 2026-11-22 | 9 | `npm test` (new `booking-email` unit tests: 22; new pgTAP 026 with 17 assertions) | First run: 432 passed, 1 timed out (`formatDay`, an existing test that took over 5 s under load; 8 of 8 passed alone). Given a longer timeout, then 3 full runs: 433/433 |
+| 2026-11-22 | 9 | Mutation checks: (a) `residents.read` not required; (b) any student can read; (c) job function open to users; (d) HTML not escaped; (e) status guard removed; (f) header injection allowed | Tests failed each time, as expected; files restored |
+| 2026-11-22 | 9 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm run test:db:parallel` | 0 problems / passed / succeeded / clean / 8/8 |
+
+### Task 9 notes
+- `src/lib/server/email/`: `send.ts` (provider-neutral transport and header safety), `booking-templates.ts` (text and escaped HTML for submitted, approved, rejected, waitlisted, lapsed), `booking-email.ts` (`sendBookingEmail`, never throws, returns `sent`, `not_configured` or `failed`).
+- **No real email can be sent yet.** `getEmailTransport()` returns null until D-9 picks a provider; that choice then needs one transport function, `EMAIL_PROVIDER_API_KEY` and `EMAIL_FROM_DOMAIN`. Task 12 must warn staff on anything other than `sent`.
+- Sender: `bookings@<EMAIL_FROM_DOMAIN>` with the hostel name as display name and reply-to set to the hostel's address (DEPLOYMENT_AND_OPERATIONS §3).
+- Migration `20261122240000_add_booking_email_details.sql`. `booking_email_details` runs with the caller's session: the student, or staff with both `bookings.read` and `residents.read`. **A custom permission set with `bookings.review` but no `residents.read` cannot trigger the email, so staff get the warning.** This avoids widening the service-role allow-list. `booking_email_details_for_job` is service role only, for the expiry job.
+- A rejection email includes the reason staff type, so task 17 must tell staff the student will see it.
+- Emails are sent after commit with no retry; retries come with the Phase 6 outbox. Hold reminders (48 h and 12 h) also wait for Phase 6.
+- The intermittent full-run failure from task 6 was not captured, so it cannot be confirmed as this same `formatDay` timeout.
 
 ### Task 8 notes
 - `tests/concurrency/booking-races.test.ts` runs every migration on a temporary real PostgreSQL 17 and gives each caller its own connection, with the same role and JWT claims PostgREST uses. It covers last-bed approvals, overlapping periods, one request approved 20 times, parallel double-submit, parallel expiry, `SKIP LOCKED`, confirm against expiry, and mixed staff work with no deadlocks.
