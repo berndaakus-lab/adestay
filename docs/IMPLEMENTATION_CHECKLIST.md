@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-6 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-7 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -495,7 +495,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 4. Approval RPC with the room-type lock — done locally (2026-11-22); parallel proof is task 8; migration `20261122180000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 5. Start review, reject, waitlist, cancel, extend hold, confirm — done locally (2026-11-22); migration `20261122190000` applied on hosted dev (confirmed 2026-11-22)
 - [x] 6. Hold expiry; requests stay with staff when a booking window closes — done locally (2026-11-22); migrations `20261122200000` and `20261122210000` **not yet applied on hosted dev**
-- [ ] 7. Booking lookup RPC (status only)
+- [x] 7. Booking lookup RPC (status only) — done locally (2026-11-22); migration `20261122220000` **not yet applied on hosted dev**
 - [ ] 8. 20-parallel-approvals test on real Postgres
 - [ ] 9. Booking email sender
 - [ ] 10. Student code sign-in limits and request submission actions
@@ -546,6 +546,19 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 6 (decision) | `npm test` with pgTAP 024 updated to 33 assertions, 3 full runs with logs kept | 409/409 passed each time; the earlier single failure did not recur and remains unidentified |
 | 2026-11-22 | 6 (decision) | Mutation check: decision migration removed | 024 failed, as expected; migration restored |
 | 2026-11-22 | 6 (decision) | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+| 2026-11-22 | 6 (decision) | **GitHub Actions CI** on `staging` (commit `639cca8`) | Passed |
+| 2026-11-22 | 7 | `npm test` (unit + db; new pgTAP 025 with 31 assertions) | 410/410 passed |
+| 2026-11-22 | 7 | Mutation checks: (a) contact not checked; (b) rate limit removed; (c) hostel not checked; (d) prefix altered by look-alike fix; (e) raw IP accepted; (f) callable by signed-in users | 025 failed each time, as expected; migration restored |
+| 2026-11-22 | 7 | `npm run lint`, `npm run typecheck` | 0 problems / passed |
+
+### Task 7 notes
+- Migration `20261122220000_add_booking_lookup.sql`: `public.lookup_booking(tenant, reference, contact, client_key)`, service role only, for `src/lib/server/booking-lookup` (task 11). The tenant must come from host resolution, never from the form.
+- Returns only `outcome` (`found`, `not_found`, `rate_limited`) and `booking_status`. Wrong reference, wrong contact and unavailable hostel look identical. Decision reasons, names, prices and dates are never returned.
+- `booking_status` is the request status, except `confirmed` (confirmed reservation) and `checked_in` (fulfilled reservation).
+- `client_key` must be a SHA-256 hex digest, so the rate-limit table cannot hold a raw IP. **Task 11 must hash the IP with a server-side secret**, because a plain hash of an IPv4 address is easy to reverse.
+- Limit: 5 per 15 minutes per visitor, counting failures. **Students sharing campus Wi-Fi or a mobile network may share one IP and hit it together**; watch this during staging and UAT.
+- Look-alike characters (O, I, L) are forgiven in the code part of a reference, not in the hostel prefix.
+- `private.rate_limits` has one row per key and nothing removes old rows yet; task 13 should clean up expired buckets.
 
 ### Task 6 notes
 - Migration `20261122200000_add_expire_reservations.sql`: `public.expire_reservations(limit)`, service role only, for the job in task 13. `app.expire_reservations(now, limit)` takes the clock so tests can control it. Returns counts, whether more may be waiting, and request ids for student emails.
