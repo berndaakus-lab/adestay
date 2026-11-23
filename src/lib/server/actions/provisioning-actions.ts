@@ -6,6 +6,7 @@ import { dbErrorMessage, type DbError, type DbErrorMessages } from "@/lib/db-err
 import { sendInvitationEmail, type InvitationDelivery } from "@/lib/server/provisioning/invitations";
 import { authorizePlatformAction, authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { fieldErrors } from "@/lib/validation/auth";
 import {
   changeRoleSchema,
@@ -103,6 +104,7 @@ export async function setTenantStatus(_prev: ProvisioningFormState, formData: Fo
     return failure(error, { invalid: "This hostel cannot move to that status. A new hostel needs an admin invitation first." });
   }
   revalidatePath("/platform", "layout");
+  refreshPublicSite(parsed.data.tenantId);
   return { status: "success", message: parsed.data.status === "suspended" ? "Hostel suspended." : "Hostel is active.", id: parsed.data.tenantId };
 }
 

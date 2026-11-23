@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { dbErrorMessage } from "@/lib/db-errors";
 import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { MAX_IMPORT_BYTES, parseInventoryCsv, type ImportIssue } from "@/lib/validation/inventory-csv";
 
 /**
@@ -86,6 +87,7 @@ async function runImport(tenantSlug: string, formData: FormData, dryRun: boolean
   if (dryRun) return { status: "preview", message: `Ready to add ${result.rooms} rooms and ${result.beds} beds.`, ...summary };
 
   revalidatePath(`/t/${tenantSlug}`, "layout");
+  refreshPublicSite(access.tenantId);
   return { status: "imported", message: `Added ${result.rooms} rooms and ${result.beds} beds.`, ...summary };
 }
 

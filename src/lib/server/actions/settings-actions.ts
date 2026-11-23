@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { dbErrorMessage, type DbError, type DbErrorMessages } from "@/lib/db-errors";
 import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { fieldErrors } from "@/lib/validation/auth";
 import { idSchema } from "@/lib/validation/inventory";
 import {
@@ -75,6 +76,7 @@ export async function updateHostelProfile(tenantSlug: string, _prev: SettingsFor
   if (!data?.length) return NOT_FOUND;
   revalidatePath(`/t/${tenantSlug}`, "layout");
   revalidatePath(`/sites/${tenantSlug}`, "layout");
+  refreshPublicSite(access.tenantId);
   return { status: "success", message: v.isPublished ? "Profile saved. It is visible on the public site." : "Profile saved. The public site stays hidden until you publish it." };
 }
 
@@ -103,6 +105,7 @@ export async function updateOperationalSettings(tenantSlug: string, _prev: Setti
   if (error) return failure(error);
   if (!data?.length) return NOT_FOUND;
   revalidatePath(`/t/${tenantSlug}`, "layout");
+  refreshPublicSite(access.tenantId);
   return { status: "success", message: "Settings saved." };
 }
 

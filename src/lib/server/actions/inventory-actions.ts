@@ -7,6 +7,7 @@ import { dbErrorMessage, type DbError, type DbErrorMessages } from "@/lib/db-err
 import type { Permission } from "@/lib/permissions";
 import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { fieldErrors } from "@/lib/validation/auth";
 import {
   bedBlockSchema,
@@ -72,6 +73,7 @@ async function runAction<S extends z.ZodType>(
   if (!data?.length) return { status: "error", message: NOT_FOUND };
 
   revalidatePath(`/t/${tenantSlug}`, "layout");
+  refreshPublicSite(tenantId);
   return { status: "success", message: success, id: data[0].id };
 }
 

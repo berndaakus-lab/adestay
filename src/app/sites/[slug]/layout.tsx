@@ -35,7 +35,8 @@ async function SiteFrame({ params, children }: { params: LayoutProps<"/sites/[sl
         </p>
       ) : null}
       <SiteHeader name={name} href={href} logoUrl={publicAssetUrl(profile?.logoPath)} />
-      <main id="main" className="flex flex-1 flex-col">
+      {/* At least a full screen, so the footer cannot jump into view while content streams in. */}
+      <main id="main" className="flex min-h-dvh flex-1 flex-col">
         {children}
       </main>
       <SiteFooter name={name} profile={profile} />
@@ -45,7 +46,7 @@ async function SiteFrame({ params, children }: { params: LayoutProps<"/sites/[sl
 
 export default function SiteLayout({ children, params }: LayoutProps<"/sites/[slug]">) {
   return (
-    <Suspense fallback={<div className="flex-1" aria-busy="true" />}>
+    <Suspense fallback={<div className="min-h-dvh flex-1" aria-busy="true" />}>
       <SiteFrame params={params}>{children}</SiteFrame>
     </Suspense>
   );

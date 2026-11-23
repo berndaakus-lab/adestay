@@ -9,6 +9,7 @@ import { sendBookingEmail } from "@/lib/server/email/booking-email";
 import type { BookingEmailEvent } from "@/lib/server/email/booking-templates";
 import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { fieldErrors } from "@/lib/validation/auth";
 import { bookingIdSchema, bookingReasonSchema, extendHoldSchema } from "@/lib/validation/booking";
 
@@ -82,6 +83,7 @@ async function decide<S extends z.ZodType<{ id: string }>>(tenantSlug: string, f
   const { error } = await db.rpc(decision.rpc, decision.args(input));
   if (error) return failure(error, decision.changedMessage);
   revalidatePath(`/t/${tenantSlug}`, "layout");
+  refreshPublicSite(access.tenantId);
 
   if (decision.silent) return { status: "success", message: decision.success };
   if (!decision.email) return { status: "success", message: decision.success, warning: NO_EMAIL_FOR_THIS };

@@ -40,6 +40,8 @@ export default defineConfig({
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "fake-anon-key-for-local-e2e-only",
         SUPABASE_SERVICE_ROLE_KEY: "fake-service-role-for-local-e2e-only",
         LOG_REDACTION_SALT: "fake-lookup-secret-for-local-e2e-only",
+        // These tests reset their data between tests, so public content must not be cached.
+        ADESTAY_PUBLIC_CACHE: "off",
         VERCEL_API_TOKEN: "",
         NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN: "",
       },

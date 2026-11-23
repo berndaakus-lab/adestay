@@ -16,7 +16,7 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ revalidatePath: h.revalidate }));
+vi.mock("next/cache", () => ({ revalidatePath: h.revalidate, updateTag: vi.fn(), cacheLife: vi.fn(), cacheTag: vi.fn() }));
 vi.mock("@/lib/server/auth", () => ({ requireStaffSession: h.session }));
 vi.mock("@/lib/server/tenant/context", () => ({ getTenantContext: async () => ({ surface: h.surface }) }));
 vi.mock("@/lib/server/email/booking-email", () => ({ sendBookingEmail: h.email }));

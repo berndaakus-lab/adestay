@@ -1,8 +1,10 @@
 import "server-only";
+import { cacheLife, cacheTag } from "next/cache";
 import { cache } from "react";
 import { getPublicSupabaseEnv } from "@/lib/server/env";
 import { getPublicSupabaseClient } from "@/lib/server/supabase/public";
 import { getPublicTenantProfile } from "./profile";
+import { PUBLIC_CACHE_LIFE, publicCacheEnabled, publicSiteTag } from "./public-cache";
 import type { ResolvedTenant } from "./resolve";
 
 export type Availability = "available" | "limited" | "full";
@@ -42,17 +44,28 @@ export function publicAssetUrl(path: string | null | undefined): string | null {
  */
 export const getPublicRooms = cache(async (tenant: ResolvedTenant): Promise<PublicRoomType[]> => {
   if (tenant.status !== "active" || !(await getPublicTenantProfile(tenant))) return [];
+  return publicCacheEnabled() ? cachedPublicRooms(tenant.id) : loadPublicRooms(tenant.id);
+});
+
+async function cachedPublicRooms(tenantId: string) {
+  "use cache";
+  cacheLife(PUBLIC_CACHE_LIFE);
+  cacheTag(publicSiteTag(tenantId));
+  return loadPublicRooms(tenantId);
+}
+
+async function loadPublicRooms(tenantId: string): Promise<PublicRoomType[]> {
   const db = getPublicSupabaseClient();
   const [types, photos, offers] = await Promise.all([
     db
       .from("room_types")
       .select("id, name, slug, description, occupancy, gender_policy, amenities")
-      .eq("tenant_id", tenant.id)
+      .eq("tenant_id", tenantId)
       .eq("is_published", true)
       .order("sort_order")
       .order("name"),
-    db.from("room_type_photos").select("room_type_id, storage_path, alt_text, sort_order").eq("tenant_id", tenant.id).order("sort_order"),
-    db.rpc("room_type_public_offers", { p_tenant_id: tenant.id }),
+    db.from("room_type_photos").select("room_type_id, storage_path, alt_text, sort_order").eq("tenant_id", tenantId).order("sort_order"),
+    db.rpc("room_type_public_offers", { p_tenant_id: tenantId }),
   ]);
   const failed = types.error ?? photos.error ?? offers.error;
   if (failed) {
@@ -88,7 +101,7 @@ export const getPublicRooms = cache(async (tenant: ResolvedTenant): Promise<Publ
         availability: o.availability,
       })),
   }));
-});
+}
 
 /** Every period with at least one bookable room, in date order. */
 export function bookablePeriods(rooms: PublicRoomType[]) {

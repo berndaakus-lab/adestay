@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-17 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **All 18 tasks built and reviewed locally; acceptance criterion 6 (page speed) NOT met; hosted acceptance pending. Not signed off.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -506,7 +506,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 15. Mobile-first booking form and confirmation page — done locally (2026-11-23); migration `20261123120000` **not yet applied on hosted dev**; real email codes need D-9 for addresses outside the Supabase team
 - [x] 16. Booking lookup page — done locally (2026-11-23), no migration; **needs `LOG_REDACTION_SALT` on Vercel and migration `20261122220000` on hosted dev**
 - [x] 17. Staff review queue and hold timer — done locally (2026-11-23), no migration; not yet exercised against hosted Supabase
-- [ ] 18. E2E, accessibility, performance and acceptance review
+- [~] 18. E2E, accessibility, performance and acceptance review — review done (2026-11-23); **criterion 6 not met**, see "Phase 3 acceptance criteria"
 
 ### Phase 3 decisions (product owner, in chat, 2026-11-22: "Approve defaults")
 - D-3 holds (120 h, 1 extension, deposit paid = confirmed); D-4 indicator (Limited = 3 or fewer); D-5 no-show (7 days, Phase 4); D-7 refunds (Phase 5a); D-11 no Turnstile for now; D-14 gender off unless the first hostel separates rooms.
@@ -595,6 +595,38 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 17 | `npm run test:e2e:admin` (new `reservations` spec at 1280 px and 360 px: queue, search, review, reject, approve, no capacity, extend, confirm, cancel, ended period, capacity table, roles; axe WCAG 2.2 AA) | 82/82 passed. **Found and fixed:** the phone staff menu stayed open after choosing a link and covered the page |
 | 2026-11-23 | 17 | Mutation checks: (a) review buttons without permission; (b) cancel without permission; (c) approval after the period ended; (d) reject before review; (e) overdue hold shown as time left | Tests failed each time, as expected; file restored |
 | 2026-11-23 | 17 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+| 2026-11-23 | 17 | **GitHub Actions CI** on `staging` (commit `e587eee`) | Passed |
+| 2026-11-23 | 18 | `npm run test:perf` before fixes (Lighthouse 13.6 mobile, simulated slow 4G, median of 3, local fake API with 150 ms delay) | LCP: Home 3818, Rooms 3521, Room 3849, Request 3522 ms failed; Policies 1756, Contact 771, Status 940 passed. Home score 74 |
+| 2026-11-23 | 18 | `npm run test:perf` after fixes | **Fails.** LCP / score: Home 2963 / 93, Rooms 2998 / 94, Room details 2849 / 95, Policies 775 / 99, Contact 775 / 99, Booking status 984 / 99, Request a room 784 / 99. Every score ≥ 85; the three pages led by a photo are over 2500 ms |
+| 2026-11-23 | 18 | `PERF_THROTTLING=devtools npm run test:perf` (slow 4G actually applied) | **Fails.** LCP 2412-2812 ms, scores 71-85. Only Policies is under 2500 ms; only Home reaches a score of 85 |
+| 2026-11-23 | 18 | Temporary browser check with the cache on | A cached page kept old content, and a staff profile change cleared it at once |
+| 2026-11-23 | 18 | `npm test`; `npm run test:db:parallel`; `npm run test:e2e:admin`; `CI=1 npx playwright test` | 652/652; 8/8; 82/82; 30/30 |
+| 2026-11-23 | 18 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm audit --omit=dev --audit-level=high` | 0 problems / passed / succeeded / clean / 0 vulnerabilities |
+
+### Phase 3 acceptance criteria (IMPLEMENTATION_PLAN §2)
+| # | Criterion | Status | Evidence |
+|---|---|---|---|
+| 1 | Submit a request at 360 px, keyboard only, screen reader labels, 0 serious axe violations | **Met locally** | `booking.spec.ts`. No real screen reader used; real Supabase Auth not exercised |
+| 2 | 20 parallel approvals, 1 bed: exactly 1 reservation, 19 "no capacity" | **Met locally** | `npm run test:db:parallel` on real PostgreSQL 17, 10 rounds. Not in CI |
+| 3 | Double-submit with one key returns the same reference | **Met locally** | Parallel test (20 submits), pgTAP 020, `booking.spec.ts` |
+| 4 | Holds expire within one job interval and release capacity (controlled clock) | **Met at database level** | pgTAP 024, parallel tests. **No schedule is running** (Vercel Hobby), and the job route has not completed a run against a real database |
+| 5 | Lookup is status only, needs reference + contact, is rate-limited | **Met locally** | pgTAP 025, unit tests, `booking-status.spec.ts`. Needs `LOG_REDACTION_SALT`; not run on Vercel |
+| 6 | Public pages LCP < 2.5 s on simulated slow 4G, Lighthouse mobile ≥ 85 | **NOT MET** | Score target met on all 7 pages; LCP target met on 4 of 7. Home, Rooms and Room details take 2.85-3.0 s. Lab result only |
+
+### Task 18 notes
+- `npm run test:perf` (`scripts/check-public-performance.mjs`) measures seven public pages against the production build. Run `npm run build` first. Lighthouse 13.6.0 is a pinned dev dependency. CI does not run it. The script's limits: fake API, photos pre-sized to 750 px because the optimizer refuses local addresses, no CDN.
+- **Improvements kept:** per-hostel public cache (`src/lib/server/tenant/public-cache.ts`, 60 seconds, cleared by staff changes); main photos load first; the ₵ symbol no longer forces an 84 KB font download; the footer no longer jumps while content streams.
+- **Cache behaviour to know:** staff changes appear at once. A hold that expires through the job can take up to about a minute to change the public indicator. Bookings never rely on the cache: the database re-reads price, deposit and capacity.
+- **Why photo pages remain slow:** the hostel is chosen from the request, so the first HTML is a generic shell and the photo address arrives in the streamed part, after the scripts have been queued. A real fix would put each hostel's main content in its first response (per-hostel static rendering), which is a larger change to routing and caching.
+
+### Open before Phase 3 sign-off (product owner)
+- [ ] Decide how to handle criterion 6: measure on real staging first (recommended), or do the per-hostel rendering work now.
+- [ ] Apply the 8 pending migrations: `npm run db:bundle -- --since 20261122190000 --no-seed` (unless some are already applied).
+- [ ] Vercel: `LOG_REDACTION_SALT`, `CRON_SECRET`; move to Pro and add the 15-minute hold-expiry schedule before the first paying hostel.
+- [ ] D-1 root domain and D-9 email provider, then connect the email transport (`src/lib/server/email/send.ts`).
+- [ ] Supabase: Magic Link template with `{{ .Token }}`, Invite user template, 60-second code interval, and the email rate limit after SMTP.
+- [ ] Run the whole journey once on staging: request, email code, review, approve, confirm, lookup, hold expiry.
+- [ ] Decide whether to add a cancellation email, and whether staff with voluntary MFA must also be enforced in the database. The second affects who can approve bookings with a password-only session.
 
 ### Task 17 notes
 - `/t/{slug}/reservations`: tabs To review, Waitlist, Approved and Closed with counts, search by reference, 50 per page, oldest waiting request first. Requests whose period ended or booking window closed are flagged.

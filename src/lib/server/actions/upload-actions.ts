@@ -6,6 +6,7 @@ import { dbErrorMessage, type DbError } from "@/lib/db-errors";
 import type { InventoryFormState } from "@/lib/server/actions/inventory-actions";
 import { authorizeStaffAction } from "@/lib/server/staff-action";
 import { createSupabaseServerClient } from "@/lib/server/supabase/server";
+import { refreshPublicSite } from "@/lib/server/tenant/public-cache";
 import { ImageRejectedError } from "@/lib/server/uploads/process-image";
 import {
   discardUploadedImage,
@@ -32,9 +33,10 @@ function failure(error: DbError): InventoryFormState {
   return { status: "error", message: `Could not save. Try again, or quote reference ${reference}.` };
 }
 
-function refresh(tenantSlug: string) {
+function refresh(tenantSlug: string, tenantId: string) {
   revalidatePath(`/t/${tenantSlug}`, "layout");
   revalidatePath(`/sites/${tenantSlug}`, "layout");
+  refreshPublicSite(tenantId);
 }
 
 type Client = Awaited<ReturnType<typeof createSupabaseServerClient>>;
@@ -80,7 +82,7 @@ export async function uploadRoomTypePhoto(tenantSlug: string, _prev: InventoryFo
     await discardUploadedImage(stored.path);
     return error ? failure(error) : NOT_FOUND;
   }
-  refresh(tenantSlug);
+  refresh(tenantSlug, access.tenantId);
   return { status: "success", message: "Photo added.", id: data[0].id };
 }
 
@@ -99,7 +101,7 @@ export async function updateRoomTypePhoto(tenantSlug: string, _prev: InventoryFo
     .select("id");
   if (error) return failure(error);
   if (!data?.length) return NOT_FOUND;
-  refresh(tenantSlug);
+  refresh(tenantSlug, access.tenantId);
   return { status: "success", message: "Photo saved.", id: data[0].id };
 }
 
@@ -119,7 +121,7 @@ export async function deleteRoomTypePhoto(tenantSlug: string, _prev: InventoryFo
   if (error) return failure(error);
   if (!data?.length) return NOT_FOUND;
   await removePublicImage(db, data[0].storage_path);
-  refresh(tenantSlug);
+  refresh(tenantSlug, access.tenantId);
   return { status: "success", message: "Photo removed.", id: data[0].id };
 }
 
@@ -159,7 +161,7 @@ export async function uploadBrandingImage(tenantSlug: string, _prev: InventoryFo
     return error ? failure(error) : NOT_FOUND;
   }
   if (current.path) await removePublicImage(db, current.path);
-  refresh(tenantSlug);
+  refresh(tenantSlug, access.tenantId);
   return { status: "success", message: parsed.data.kind === "logo" ? "Logo updated." : "Main photo updated." };
 }
 
@@ -183,6 +185,6 @@ export async function removeBrandingImage(tenantSlug: string, _prev: InventoryFo
   if (error) return failure(error);
   if (!data?.length) return NOT_FOUND;
   if (current.path) await removePublicImage(db, current.path);
-  refresh(tenantSlug);
+  refresh(tenantSlug, access.tenantId);
   return { status: "success", message: "Image removed." };
 }
