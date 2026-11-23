@@ -49,6 +49,20 @@ export const bookingRequestSchema = z.object({
 
 export type BookingRequestInput = z.output<typeof bookingRequestSchema>;
 
+// Staff decisions. The RPCs repeat every rule; these give clear form errors.
+const decisionReason = z.string("Give a short reason").trim().min(3, "Give a short reason").max(500, "Reason is too long");
+
+export const bookingIdSchema = z.object({ id: z.uuid("Choose a valid booking") });
+export const bookingReasonSchema = bookingIdSchema.extend({ reason: decisionReason });
+export const extendHoldSchema = bookingReasonSchema.extend({
+  hours: z
+    .string("Enter the extra hours")
+    .trim()
+    .regex(/^\d{1,3}$/, "Enter a whole number of hours")
+    .transform(Number)
+    .refine((hours) => hours >= 1 && hours <= 336, "Enter between 1 and 336 hours"),
+});
+
 /** Booking lookup. A contact that is neither is still sent, so it gets the same "not found". */
 export const bookingLookupSchema = z.object({
   reference: z.string("Enter your booking reference").trim().min(1, "Enter your booking reference").max(20, "Check your booking reference"),

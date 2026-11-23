@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-11 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-12 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -500,7 +500,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 9. Booking email sender — done locally (2026-11-22), provider-neutral; **no email is delivered until D-9 is decided**; migration `20261122240000` **not yet applied on hosted dev**
 - [x] 10. Student code sign-in limits and request submission actions — submission done locally (2026-11-22), no migration; sign-in codes limited by Supabase Auth (product owner decision); **dashboard limits still to be set**
 - [x] 11. Rate-limited lookup action — done locally (2026-11-22), no migration; **needs `LOG_REDACTION_SALT` on Vercel** (task 11 notes)
-- [ ] 12. Staff review actions
+- [x] 12. Staff review actions — done locally (2026-11-23), no migration; screens come in task 17
 - [ ] 13. Secured hold-expiry job
 - [ ] 14. Branded home, room list and detail, policies and contact pages
 - [ ] 15. Mobile-first booking form and confirmation page
@@ -567,6 +567,16 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-22 | 11 | `npm test` (new `booking-lookup` tests: 39) | 504/504 passed |
 | 2026-11-22 | 11 | Mutation checks: (a) hostel from the form; (b) hash not keyed; (c) each IPv6 address counted alone; (d) short secret accepted; (e) forwarded header trusted off Vercel; (f) lookup without a client key; (g) found without a status | Tests failed each time, as expected; files restored |
 | 2026-11-22 | 11 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+| 2026-11-23 | 11 | **GitHub Actions CI** on `staging` (commit `64806bd`) | Passed |
+| 2026-11-23 | 12 | `npm test` (new `booking-review-actions` tests: 63) | 567/567 passed |
+| 2026-11-23 | 12 | Mutation checks: (a) hostel check removed; (b) hostel filter removed; (c) cancel uses review permission; (d) permission check removed; (e) email failure hidden; (f) refused decision treated as done; (g) no-email warning removed | Tests failed each time, as expected; file restored |
+| 2026-11-23 | 12 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+
+### Task 12 notes
+- `src/lib/server/actions/booking-review-actions.ts`: `startBookingReview`, `approveBooking`, `rejectBooking`, `waitlistBooking`, `cancelBooking`, `extendBookingHold`, `confirmBookingHold`. Bind the slug in the page. Each repeats host, session + MFA, membership and permission checks, then uses the staff member's session.
+- **Cross-hostel guard:** the RPCs accept any hostel where the caller holds the permission, so someone working at two hostels could otherwise act on hostel B from hostel A's URL. Each action first confirms through RLS that the record belongs to the hostel in the URL. This read needs `bookings.read`, so a custom set with `bookings.review` alone gets "no longer exists".
+- Approve, reject and waitlist email the student. If the email does not go out, the decision stands and the action returns a `warning`. Until D-9 every one of these shows that warning.
+- **Cancel, extend and confirm have no email template** (not in the approved list), so they always warn staff to tell the student directly. Task 17 must show `warning` prominently.
 
 ### Task 11 notes
 - `src/lib/server/booking-lookup/` (already on the service-role allow-list) and `src/lib/server/actions/booking-lookup-actions.ts` (`lookupBookingStatus`). The action does not import the service-role client. The hostel comes from `getSiteTenant`.
