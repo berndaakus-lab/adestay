@@ -34,6 +34,12 @@ export const resetData = async () => {
   await fetch(`${API}/__reset`);
 };
 
+/** Made-up published hostel with rooms, photos, prices and periods. */
+export const seedPublicSite = async () => {
+  await fetch(`${API}/__reset`);
+  await fetch(`${API}/__seed-public`);
+};
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const apiState = async (): Promise<{ db: Record<string, any[]>; objects: string[] }> => (await fetch(`${API}/__state`)).json();
 

@@ -14,16 +14,30 @@ export interface PublicTenantProfile {
   address: string | null;
   digitalAddress: string | null;
   landmarkDirections: string | null;
+  logoPath: string | null;
+  heroImagePath: string | null;
+  primaryColor: string | null;
+  accentColor: string | null;
+  mapUrl: string | null;
+  policies: string | null;
+  terms: string | null;
 }
 
 export const getPublicTenantProfile = cache(async (tenant: ResolvedTenant): Promise<PublicTenantProfile | null> => {
   const { data } = await getPublicSupabaseClient()
     .from("tenant_profiles")
-    .select("display_name, tagline, about, contact_phone, contact_email, whatsapp_phone, address, digital_address, landmark_directions")
+    .select("display_name, tagline, about, contact_phone, contact_email, whatsapp_phone, address, digital_address, landmark_directions, logo_path, hero_image_path, primary_color, accent_color, map_url, policies_md, terms_md")
     .eq("tenant_id", tenant.id)
     .maybeSingle();
   if (!data) return null;
   return {
+    logoPath: data.logo_path,
+    heroImagePath: data.hero_image_path,
+    primaryColor: data.primary_color,
+    accentColor: data.accent_color,
+    mapUrl: data.map_url,
+    policies: data.policies_md,
+    terms: data.terms_md,
     displayName: data.display_name,
     tagline: data.tagline,
     about: data.about,

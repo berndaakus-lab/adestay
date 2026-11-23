@@ -104,6 +104,56 @@ function capacity(uid) {
   );
 }
 
+// What room_type_public_offers returns on the real schema (pgTAP 028 covers the real function).
+function publicOffers(a) {
+  const tenant = db.tenants.find((t) => t.id === a.p_tenant_id);
+  const profile = db.tenant_profiles.find((p) => p.tenant_id === a.p_tenant_id);
+  if (tenant?.status !== "active" || !profile?.is_published) return [];
+  const settings = db.tenant_settings.find((s) => s.tenant_id === a.p_tenant_id);
+  return db.room_type_prices.flatMap((price) => {
+    const type = db.room_types.find((t) => t.id === price.room_type_id);
+    const period = db.booking_periods.find((p) => p.id === price.booking_period_id);
+    if (price.tenant_id !== a.p_tenant_id || !type?.is_published || period?.status !== "open") return [];
+    const beds = db.rooms.filter((r) => r.room_type_id === type.id && r.status === "active").flatMap((r) => db.beds.filter((b) => b.room_id === r.id && b.status === "active")).length;
+    return [{
+      room_type_id: type.id, booking_period_id: period.id, period_name: period.name, period_kind: period.kind, starts_on: period.starts_on, ends_on: period.ends_on,
+      amount_minor: price.amount_minor, deposit_minor: settings?.deposit_policy === "none" ? 0 : price.deposit_minor,
+      availability: beds === 0 ? "full" : beds <= 3 ? "limited" : "available",
+    }];
+  }).sort((x, y) => x.starts_on.localeCompare(y.starts_on));
+}
+
+// Made-up public hostel content for tests/e2e-admin/public-site.spec.ts.
+const TINY_WEBP = Buffer.from("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA", "base64");
+function seedPublicSite() {
+  const ref = (group, n) => `${group}0000000-0000-4000-8000-00000000000${n}`;
+  const logo = `${T}/branding/logo-0001.webp`;
+  const hero = `${T}/branding/hero-0001.webp`;
+  const photo = `${T}/room-types/${ref(2, 1)}/photo-0001.webp`;
+  for (const path of [logo, hero, photo]) objects.set(path, TINY_WEBP);
+  Object.assign(db.tenant_profiles.find((p) => p.tenant_id === T), {
+    tagline: "A calm place to study and live", about: "Ten minutes from campus.\n<b>Quiet</b> and secure.", logo_path: logo, hero_image_path: hero,
+    primary_color: "#7a1f3d", accent_color: "#7a5e26", contact_phone: "+233241234567", whatsapp_phone: "+233241234567", contact_email: "hello@alder.example.com",
+    address: "12 Legon Road, Accra", digital_address: "GA-123-4567", landmark_directions: "Behind the main bus stop", map_url: "https://maps.example.com/alder",
+    policies_md: "Quiet hours start at 22:00.\n<script>window.__xss = 1</script>\n**Not bold**", terms_md: "Deposits are explained at booking.",
+  });
+  const period = (n, name, kind, starts_on, ends_on, status) => ({ id: ref(1, n), tenant_id: T, name, kind, starts_on, ends_on, status, booking_opens_at: null, booking_closes_at: null });
+  db.booking_periods = [
+    period(1, "2040/41 Academic Year", "academic_year", "2040-09-01", "2041-07-31", "open"),
+    period(2, "Vacation 2041", "vacation", "2041-08-01", "2041-08-31", "open"),
+    period(3, "Draft period", "semester", "2042-01-01", "2042-05-31", "draft"),
+  ];
+  const type = (n, name, slug, occupancy, gender_policy, is_published) => ({
+    id: ref(2, n), tenant_id: T, name, slug, description: `${name} with a desk and wardrobe.`, occupancy, gender_policy, amenities: ["Wi-Fi", "Study desk"], is_published, sort_order: n,
+  });
+  db.room_types = [type(1, "Two in a room", "two-in-a-room", 6, "any", true), type(2, "Single room", "single-room", 2, "female", true), type(3, "Four in a room", "four-in-a-room", 4, "male", true), type(4, "Hidden room", "hidden-room", 2, "any", false)];
+  db.room_type_photos = [{ id: ref(5, 1), tenant_id: T, room_type_id: ref(2, 1), storage_path: photo, alt_text: "Two beds by a bright window", sort_order: 0 }];
+  db.rooms = [1, 2, 4].map((n) => ({ id: ref(3, n), tenant_id: T, room_type_id: ref(2, n), label: `R-${n}`, block: null, floor: null, gender_policy_override: null, status: "active", notes: null }));
+  db.beds = [[1, 5], [2, 2], [4, 2]].flatMap(([n, beds]) => Array.from({ length: beds }, (_, i) => ({ id: randomUUID(), tenant_id: T, room_id: ref(3, n), label: `B${i + 1}`, status: "active" })));
+  const price = (n, p, amount_minor, deposit_minor) => ({ id: randomUUID(), tenant_id: T, room_type_id: ref(2, n), booking_period_id: ref(1, p), amount_minor, deposit_minor, currency: "GHS" });
+  db.room_type_prices = [price(1, 1, 450000, 100000), price(2, 1, 800000, 0), price(3, 1, 300000, 50000), price(4, 1, 100000, 0), price(1, 2, 60000, 0), price(1, 3, 99900, 0)];
+}
+
 function importInventory(a, uid) {
   if (!has(uid, "inventory.manage")) refuse("42501");
   const errors = [];
@@ -161,6 +211,7 @@ const RPC = {
   },
   can_upload_public_asset: (a, uid) => (a.p_name.includes("/branding/") ? has(uid, "settings.manage") : has(uid, "inventory.manage")),
   room_type_capacity: (_a, uid) => capacity(uid),
+  room_type_public_offers: publicOffers,
   import_inventory: importInventory,
   invite_staff_member: (a, uid) => {
     if (!has(uid, "staff.manage")) refuse("42501");
@@ -364,6 +415,10 @@ http
         return send(res, {});
       }
       if (path === "/__state") return send(res, { db, objects: [...objects.keys()] });
+      if (path === "/__seed-public") {
+        seedPublicSite();
+        return send(res, {});
+      }
       if (path === "/auth/v1/user") {
         const uid = subject(req);
         const needsFactor = uid === USERS.platform || db.tenant_memberships.some((m) => m.user_id === uid && m.role === "hostel_admin");

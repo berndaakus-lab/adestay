@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-13 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-14 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -502,7 +502,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 11. Rate-limited lookup action — done locally (2026-11-22), no migration; **needs `LOG_REDACTION_SALT` on Vercel** (task 11 notes)
 - [x] 12. Staff review actions — done locally (2026-11-23), no migration; screens come in task 17
 - [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule yet; the project is on Vercel Hobby (at most daily)**
-- [ ] 14. Branded home, room list and detail, policies and contact pages
+- [x] 14. Branded home, room list and detail, policies and contact pages — done locally (2026-11-23); migration `20261123110000` **not yet applied on hosted dev**; not yet exercised on hosted Supabase or Vercel
 - [ ] 15. Mobile-first booking form and confirmation page
 - [ ] 16. Booking lookup page
 - [ ] 17. Staff review queue and hold timer
@@ -575,6 +575,20 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 13 | Mutation checks: (a) route not authorised; (b) emails not via job path; (c) spins on locked rows; (d) time budget ignored; (e) failed run returns 200; (f) purge removes live buckets; (g) users can purge | Tests failed each time, as expected; files restored |
 | 2026-11-23 | 13 | Live production server, `/api/cron/expire-holds`, no Supabase keys: no header, wrong secret, right secret | 401 / 401 / 500 `Job failed`, all `no-store`. The 500 is expected without a database; a successful run has **not** been exercised against a real database through this route |
 | 2026-11-23 | 13 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+| 2026-11-23 | 13 | **GitHub Actions CI** on `staging` (commit `9a7d52e`) | Passed |
+| 2026-11-23 | 14 | `npm test` (new pgTAP 028 with 14 assertions; `brand-style` tests) | 596/596 passed |
+| 2026-11-23 | 14 | `npm run test:e2e:admin` (new `public-site` spec at 1280 px and 360 px against the local fake API, axe WCAG 2.2 AA on each page) | 30/30 passed |
+| 2026-11-23 | 14 | Mutation checks: (a) deposit ignores the hostel rule; (b) offers skip the bookable filter; (c) unsafe colour accepted | Tests failed each time, as expected; files restored |
+| 2026-11-23 | 14 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+
+### Task 14 notes
+- Public pages under `/sites/[slug]`: home, `/rooms` (period choice by link, no JavaScript needed), `/rooms/[roomSlug]`, `/policies`, `/contact`. Hostel logo, main photo and colours now show. House rules and terms are plain text, escaped by React.
+- Migration `20261123110000_add_public_room_offers.sql`: `public.room_type_public_offers(tenant)` returns period, price, the deposit a request would be quoted, and Available / Limited / Full. `tenant_settings` stays private, and no bed count is exposed.
+- `next.config.ts`: the image optimizer accepts only this project's `tenant-public` bucket, taken from `NEXT_PUBLIC_SUPABASE_URL` at build time. **Real image optimization is untested:** the local API is HTTP, so tests load images directly. Vercel Hobby also has a monthly image-optimization allowance.
+- The room page has no booking button yet (task 15); it links to Contact.
+- Pages render on request with no shared cache. Task 18 measures performance (criterion 6) and decides whether per-hostel caching is needed.
+- An unknown room shows the 404 page; because these pages stream, its HTTP status has not been checked and may be 200.
+- The fake API does not prove RLS on the public queries; the real rules are covered by pgTAP 009 and 021 and 028.
 
 ### Task 13 notes
 - `src/app/api/cron/expire-holds/` (`route.ts`, `job.ts`), inside the existing cron service-role allow-list. Needs `Authorization: Bearer <CRON_SECRET>` and returns counts only.
