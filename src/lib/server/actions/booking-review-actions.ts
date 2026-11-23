@@ -33,11 +33,11 @@ const NOT_FOUND: BookingReviewState = { status: "error", message: "That booking 
 const NOT_EMAILED = "The student was not emailed. Contact them directly.";
 const NO_EMAIL_FOR_THIS = "No email is sent for this action. Tell the student directly.";
 
-function failure(error: DbError): BookingReviewState {
+function failure(error: DbError, changedMessage = "This booking has changed. Refresh the page and try again."): BookingReviewState {
   if (error.code === "AS409") {
     return { status: "error", message: "No bed is left for this room type and period. You can waitlist this request instead." };
   }
-  if (error.code === "55000") return { status: "error", message: "This booking has changed. Refresh the page and try again." };
+  if (error.code === "55000") return { status: "error", message: changedMessage };
   const message = dbErrorMessage(error, { invalid: "Check the details and try again. An extension cannot be longer than the hostel's hold period." });
   if (message) return { status: "error", message };
   const reference = randomUUID().slice(0, 8);
@@ -57,6 +57,8 @@ interface Decision<S extends z.ZodType> {
   email?: BookingEmailEvent;
   /** Opening a request for review is internal, so the student needs no message. */
   silent?: boolean;
+  /** Replaces the general "has changed" message for this decision. */
+  changedMessage?: string;
 }
 
 async function decide<S extends z.ZodType<{ id: string }>>(tenantSlug: string, formData: FormData, decision: Decision<S>): Promise<BookingReviewState> {
@@ -78,7 +80,7 @@ async function decide<S extends z.ZodType<{ id: string }>>(tenantSlug: string, f
   if (!owned) return NOT_FOUND;
 
   const { error } = await db.rpc(decision.rpc, decision.args(input));
-  if (error) return failure(error);
+  if (error) return failure(error, decision.changedMessage);
   revalidatePath(`/t/${tenantSlug}`, "layout");
 
   if (decision.silent) return { status: "success", message: decision.success };
@@ -156,6 +158,7 @@ export async function extendBookingHold(tenantSlug: string, _prev: BookingReview
     rpc: "extend_hold",
     args: (v) => ({ p_reservation_id: v.id, p_hours: v.hours, p_reason: v.reason }),
     success: "Hold extended.",
+    changedMessage: "This hold has used all its extensions, or it has changed. Refresh the page to check.",
   });
 }
 

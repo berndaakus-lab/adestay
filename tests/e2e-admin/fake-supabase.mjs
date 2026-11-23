@@ -8,9 +8,9 @@ const PORT = Number(process.env.FAKE_SUPABASE_PORT ?? 54399);
 const T = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const S = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const id = (suffix) => `00000000-0000-4000-8000-0000000000${suffix}`;
-const USERS = { platform: id("e1"), admin: id("a1"), manager: id("a2"), desk: id("a3"), pricer: id("a4"), accounts: id("a5"), suspended: id("c1"), student: id("d1") };
+const USERS = { platform: id("e1"), admin: id("a1"), manager: id("a2"), desk: id("a3"), pricer: id("a4"), accounts: id("a5"), suspended: id("c1"), student: id("d1"), reviewer: id("a6") };
 const SET = { desk: "90000000-0000-4000-8000-000000000001", manager: "90000000-0000-4000-8000-000000000002", pricer: "90000000-0000-4000-8000-000000000003", accounts: "90000000-0000-4000-8000-000000000004" };
-const CATALOG = ["inventory.read", "inventory.manage", "pricing.manage", "settings.read", "settings.manage", "staff.manage", "audit.read"];
+const CATALOG = ["inventory.read", "inventory.manage", "pricing.manage", "settings.read", "settings.manage", "staff.manage", "audit.read", "bookings.read", "bookings.review", "bookings.cancel", "residents.read"];
 
 let db;
 const objects = new Map();
@@ -34,8 +34,8 @@ function seed() {
     tenant_profiles: [profile(T, "Alder House", true), profile(S, "Closed Hostel", true)],
     tenant_settings: [{ tenant_id: T, hold_duration_hours: 120, hold_extension_max: 1, deposit_policy: "fixed", deposit_value: 0, min_paid_percent_for_checkin: 100, require_payment_before_allocation: false, student_id_required: false, gender_policy_enforced: false }],
     permission_sets: [
-      { id: SET.desk, tenant_id: null, key: "front_desk", name: "Front Desk", description: "Arrivals and check-in.", permissions: ["inventory.read"], is_system: true },
-      { id: SET.manager, tenant_id: null, key: "manager", name: "Manager", description: "Day-to-day running.", permissions: ["inventory.read", "inventory.manage", "settings.read", "audit.read"], is_system: true },
+      { id: SET.desk, tenant_id: null, key: "front_desk", name: "Front Desk", description: "Arrivals and check-in.", permissions: ["inventory.read", "bookings.read", "residents.read"], is_system: true },
+      { id: SET.manager, tenant_id: null, key: "manager", name: "Manager", description: "Day-to-day running.", permissions: ["inventory.read", "inventory.manage", "settings.read", "audit.read", "bookings.read", "bookings.review", "bookings.cancel", "residents.read"], is_system: true },
       { id: SET.pricer, tenant_id: T, key: "pricing", name: "Pricing", description: null, permissions: ["pricing.manage"], is_system: false },
       { id: SET.accounts, tenant_id: null, key: "accounts", name: "Accounts", description: null, permissions: ["finance.read"], is_system: true },
     ],
@@ -56,6 +56,8 @@ function seed() {
     bed_blocks: [],
     room_type_prices: [],
     booking_requests: [],
+    reservations: [],
+    residents: [],
     // Made-up bookings for the lookup page, kept apart so submitted references stay predictable.
     lookup_bookings: [
       ["ALD-SUBM1T", "submitted"], ["ALD-REV1EW", "under_review"], ["ALD-WA1TL5", "waitlisted"], ["ALD-APPR0V", "approved"], ["ALD-C0NF1R", "confirmed"],
@@ -94,7 +96,10 @@ const canSeeRooms = (uid) => has(uid, "inventory.read") || has(uid, "inventory.m
 const nextDay = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
 function capacity(uid) {
-  if (!canSeeRooms(uid)) return [];
+  return canSeeRooms(uid) ? capacityRows() : [];
+}
+
+function capacityRows() {
   return db.booking_periods.filter((p) => p.status !== "archived").flatMap((p) =>
     db.room_types.map((t) => {
       const rooms = db.rooms.filter((r) => r.room_type_id === t.id && r.status !== "retired");
@@ -161,6 +166,106 @@ function seedPublicSite() {
   const price = (n, p, amount_minor, deposit_minor) => ({ id: randomUUID(), tenant_id: T, room_type_id: ref(2, n), booking_period_id: ref(1, p), amount_minor, deposit_minor, currency: "GHS" });
   db.room_type_prices = [price(1, 1, 450000, 100000), price(2, 1, 800000, 0), price(3, 1, 300000, 50000), price(4, 1, 100000, 0), price(1, 2, 60000, 0), price(1, 3, 99900, 0)];
 }
+
+// Made-up bookings for the staff queue (the real RPCs are covered by pgTAP 022, 023 and 021).
+function seedBookings() {
+  db.tenant_memberships.push({ id: randomUUID(), tenant_id: T, user_id: USERS.reviewer, role: "staff", status: "active", permission_set_id: "90000000-0000-4000-8000-000000000005", invited_email: "reviewer@alder.test", accepted_at: "2026-01-01T00:00:00Z", created_at: "2026-01-01T00:00:00Z" });
+  db.permission_sets.push({ id: "90000000-0000-4000-8000-000000000005", tenant_id: T, key: "review_only", name: "Review only", description: null, permissions: ["bookings.read", "bookings.review"], is_system: false });
+  const uuid = (group, n) => `${group}0000000-0000-4000-8000-0000000000${String(n).padStart(2, "0")}`;
+  const hours = (n) => new Date(Date.now() + n * 3_600_000).toISOString();
+  const rows = [
+    [1, "submitted", 1], [2, "under_review", 1], [3, "waitlisted", 1], [4, "approved", 1, "held", hours(50)], [5, "approved", 1, "held", hours(-2)],
+    [6, "approved", 1, "confirmed"], [7, "rejected", 1], [8, "submitted", 3], [9, "submitted", 1, null, null, "1"],
+  ];
+  for (const [n, status, room, held, expires, past] of rows) {
+    db.residents.push({ id: uuid(6, n), tenant_id: T, user_id: null, full_name: `Student ${n}`, email: `student${n}@example.com`, phone_e164: "+233241234567", institution: "University of Ghana", programme: "Nursing", level: "200", status: "applicant" });
+    db.booking_requests.push({
+      id: uuid(7, n), tenant_id: T, reference: `ALD-REQ0${String(n).padStart(2, "0")}`, status, resident_id: uuid(6, n), room_type_id: uuid(2, room).replace(/0000000000(\d\d)$/, (_, d) => `00000000000${Number(d)}`),
+      booking_period_id: past ? "10000000-0000-4000-8000-000000000009" : "10000000-0000-4000-8000-000000000001", quoted_amount_minor: 450000, quoted_deposit_minor: 100000,
+      student_note: n === 1 ? "Near the library please" : null, submitted_at: hours(-100 + n), decided_at: ["approved", "rejected"].includes(status) ? hours(-5) : null,
+      decision_reason: status === "rejected" ? "Details were incomplete" : null, cancel_reason: null, idempotency_key: randomUUID(),
+    });
+    if (held) db.reservations.push({ id: uuid(8, n), tenant_id: T, booking_request_id: uuid(7, n), room_type_id: db.booking_requests.at(-1).room_type_id, booking_period_id: db.booking_requests.at(-1).booking_period_id, status: held, hold_expires_at: expires ?? null, extensions_used: 0 });
+  }
+  db.booking_periods.push({ id: "10000000-0000-4000-8000-000000000009", tenant_id: T, name: "Past term", kind: "semester", starts_on: "2020-01-01", ends_on: "2020-05-01", status: "closed", booking_opens_at: null, booking_closes_at: null });
+}
+
+const liveHolds = (type, period) => db.reservations.filter((r) => r.room_type_id === type && r.booking_period_id === period && (["confirmed", "fulfilled"].includes(r.status) || (r.status === "held" && r.hold_expires_at > new Date().toISOString()))).length;
+
+function availabilityRows(uid) {
+  if (!canSeeRooms(uid) && !has(uid, "bookings.read")) return [];
+  return capacityRows().map((c) => {
+    const reserved = liveHolds(c.room_type_id, c.booking_period_id);
+    return { room_type_id: c.room_type_id, booking_period_id: c.booking_period_id, sellable_beds: c.sellable_beds, reserved_beds: reserved, remaining_beds: Math.max(c.sellable_beds - reserved, 0), overcommitted: reserved > c.sellable_beds };
+  });
+}
+
+const staffRequest = (requestId, permission, uid) => {
+  const r = db.booking_requests.find((x) => x.id === requestId);
+  if (!r || !has(uid, permission)) refuse("42501");
+  return r;
+};
+const staffHold = (reservationId, uid) => {
+  const r = db.reservations.find((x) => x.id === reservationId);
+  if (!r || !has(uid, "bookings.review")) refuse("42501");
+  if (r.status !== "held") refuse({ code: "55000", message: "wrong state" });
+  return r;
+};
+const allowFrom = (r, statuses) => {
+  if (!statuses.includes(r.status)) refuse({ code: "55000", message: "wrong state" });
+};
+const BOOKING_RPC = {
+  room_type_availability: (_a, uid) => availabilityRows(uid),
+  start_booking_review: (a, uid) => {
+    const r = staffRequest(a.p_request_id, "bookings.review", uid);
+    allowFrom(r, ["submitted", "under_review"]);
+    r.status = "under_review";
+    return r.status;
+  },
+  approve_booking_request: (a, uid) => {
+    const r = staffRequest(a.p_request_id, "bookings.review", uid);
+    allowFrom(r, ["submitted", "under_review", "waitlisted"]);
+    const row = availabilityRows(uid).find((x) => x.room_type_id === r.room_type_id && x.booking_period_id === r.booking_period_id);
+    if (!row || row.remaining_beds < 1) refuse({ code: "AS409", message: "no capacity" });
+    const hold = { id: randomUUID(), tenant_id: r.tenant_id, booking_request_id: r.id, room_type_id: r.room_type_id, booking_period_id: r.booking_period_id, status: "held", hold_expires_at: new Date(Date.now() + 120 * 3_600_000).toISOString(), extensions_used: 0 };
+    db.reservations.push(hold);
+    Object.assign(r, { status: "approved", decided_at: new Date().toISOString() });
+    return [{ approved_request_id: r.id, new_reservation_id: hold.id, hold_until: hold.hold_expires_at }];
+  },
+  reject_booking_request: (a, uid) => {
+    const r = staffRequest(a.p_request_id, "bookings.review", uid);
+    allowFrom(r, ["under_review", "waitlisted"]);
+    Object.assign(r, { status: "rejected", decision_reason: a.p_reason, decided_at: new Date().toISOString() });
+    return r.status;
+  },
+  waitlist_booking_request: (a, uid) => {
+    const r = staffRequest(a.p_request_id, "bookings.review", uid);
+    allowFrom(r, ["submitted", "under_review"]);
+    r.status = "waitlisted";
+    return r.status;
+  },
+  cancel_booking_request: (a, uid) => {
+    const r = staffRequest(a.p_request_id, "bookings.cancel", uid);
+    allowFrom(r, ["approved"]);
+    const hold = db.reservations.find((x) => x.booking_request_id === r.id);
+    Object.assign(hold, { status: "cancelled", end_reason: a.p_reason });
+    Object.assign(r, { status: "cancelled", cancel_reason: a.p_reason });
+    return r.status;
+  },
+  extend_hold: (a, uid) => {
+    const hold = staffHold(a.p_reservation_id, uid);
+    if (hold.extensions_used >= 1) refuse({ code: "55000", message: "used" });
+    if (a.p_hours > 120) refuse({ code: "22023", message: "too long" });
+    const from = Math.max(Date.parse(hold.hold_expires_at), Date.now());
+    Object.assign(hold, { hold_expires_at: new Date(from + a.p_hours * 3_600_000).toISOString(), extensions_used: hold.extensions_used + 1 });
+    return hold.hold_expires_at;
+  },
+  confirm_reservation: (a, uid) => {
+    const hold = staffHold(a.p_reservation_id, uid);
+    hold.status = "confirmed";
+    return hold.status;
+  },
+};
 
 // The behaviour of lookup_booking the page depends on (pgTAP 025 covers the real function).
 function lookupBooking(a) {
@@ -251,6 +356,7 @@ const RPC = {
   room_type_public_offers: publicOffers,
   submit_booking_request: submitBooking,
   lookup_booking: lookupBooking,
+  ...BOOKING_RPC,
   booking_form_rules: (a) => {
     const s = db.tenant_settings.find((x) => x.tenant_id === a.p_tenant_id);
     return s ? [{ student_id_required: s.student_id_required, gender_required: s.gender_policy_enforced }] : [];
@@ -351,6 +457,8 @@ function visible(table, uid) {
     return rows.filter((p) => p.tenant_id === member?.tenant_id || (p.is_published && db.tenants.find((t) => t.id === p.tenant_id)?.status === "active"));
   }
   if (table === "platform_admins") return rows.filter((r) => r.user_id === uid);
+  if (table === "booking_requests" || table === "reservations") return has(uid, "bookings.read") ? rows : [];
+  if (table === "residents") return has(uid, "residents.read") ? rows : [];
   return rows;
 }
 
@@ -461,6 +569,7 @@ http
       if (path === "/__seed-public") {
         seedPublicSite();
         if (url.searchParams.get("rules") === "1") Object.assign(db.tenant_settings[0], { student_id_required: true, gender_policy_enforced: true });
+        if (url.searchParams.get("bookings") === "1") seedBookings();
         return send(res, {});
       }
       // The student's email code: 123456 is correct, and the token is unsigned like signIn's.

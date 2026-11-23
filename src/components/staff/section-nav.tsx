@@ -2,6 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef, type ReactNode } from "react";
+
+/** The phone menu. The shell survives navigation, so choosing a link must close it. */
+export function MobileMenu({ children }: { children: ReactNode }) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  return (
+    <details
+      ref={menu}
+      className="md:hidden"
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a") && menu.current) menu.current.open = false;
+      }}
+    >
+      {children}
+    </details>
+  );
+}
 
 /** A link in the workspace menu. Overview matches exactly; sections also match their sub-pages. */
 export function StaffNavLink({ href, exact, label }: { href: string; exact: boolean; label: string }) {

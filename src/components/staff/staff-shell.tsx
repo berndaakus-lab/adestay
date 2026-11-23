@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Logo } from "@/components/brand/logo";
-import { StaffNavLink } from "@/components/staff/section-nav";
+import { MobileMenu, StaffNavLink } from "@/components/staff/section-nav";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/server/actions/auth-actions";
 import type { StaffNavItem } from "@/lib/staff-nav";
@@ -60,14 +60,14 @@ export function StaffShell(props: StaffShellProps) {
       <aside className="bg-sidebar text-sidebar-foreground md:w-64 md:shrink-0">
         <div className="relative flex items-center justify-between gap-3 px-4 py-4 md:block md:px-5 md:py-6">
           <Logo inverse name="AdeStay" tagline="Hostel management" />
-          <details className="md:hidden">
+          <MobileMenu>
             <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-sm border border-sidebar-border px-3 text-sm">
               Menu
             </summary>
             <nav aria-label="Workspace" className="absolute right-4 left-4 z-20 mt-2 rounded-lg bg-sidebar p-3 shadow-lg">
               <NavList tenantSlug={tenantSlug} nav={nav} />
             </nav>
-          </details>
+          </MobileMenu>
         </div>
         <nav aria-label="Workspace" className="hidden px-3 md:block">
           <NavList tenantSlug={tenantSlug} nav={nav} />

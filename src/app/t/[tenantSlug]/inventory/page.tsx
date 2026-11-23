@@ -20,6 +20,14 @@ interface CapacityRow {
   sellable_beds: number;
 }
 
+interface AvailabilityRow {
+  room_type_id: string;
+  booking_period_id: string;
+  reserved_beds: number;
+  remaining_beds: number;
+  overcommitted: boolean;
+}
+
 function SetupStep({ done, href, children }: { done: boolean; href: string; children: string }) {
   return (
     <li className="flex items-center gap-3 text-sm">
@@ -39,16 +47,21 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
   if (!hasPermission(access, "inventory.read") && !hasPermission(access, "inventory.manage")) redirect(`${base}/prices`);
 
   const db = await createSupabaseServerClient();
-  const [capacity, periods, types, prices] = await Promise.all([
+  const [capacity, availability, periods, types, prices] = await Promise.all([
     db.rpc("room_type_capacity", { p_tenant_id: access.tenantId }),
+    db.rpc("room_type_availability", { p_tenant_id: access.tenantId }),
     db.from("booking_periods").select("id, name, starts_on, ends_on, status").eq("tenant_id", access.tenantId).neq("status", "archived").order("starts_on", { ascending: false }),
     db.from("room_types").select("id, name, sort_order").eq("tenant_id", access.tenantId).order("sort_order").order("name"),
     db.from("room_type_prices").select("id", { count: "exact", head: true }).eq("tenant_id", access.tenantId),
   ]);
-  for (const result of [capacity, periods, types, prices]) {
+  for (const result of [capacity, availability, periods, types, prices]) {
     if (result.error) throw new Error(`Could not load capacity (${result.error.code})`);
   }
-  const rows = (capacity.data ?? []) as CapacityRow[];
+  const live = (availability.data ?? []) as AvailabilityRow[];
+  const rows = ((capacity.data ?? []) as CapacityRow[]).map((row) => {
+    const match = live.find((a) => a.room_type_id === row.room_type_id && a.booking_period_id === row.booking_period_id);
+    return { ...row, reserved_beds: match?.reserved_beds ?? 0, remaining_beds: match?.remaining_beds ?? row.sellable_beds, overcommitted: match?.overcommitted ?? false };
+  });
   const periodRows = periods.data ?? [];
   const typeRows = types.data ?? [];
   const hasBeds = rows.some((row) => row.total_beds > 0);
@@ -72,7 +85,8 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
           const row = rows.find((r) => r.booking_period_id === period.id && r.room_type_id === type.id);
           return row ? [{ name: type.name, ...row }] : [];
         });
-        const sum = (key: "total_beds" | "out_of_service_beds" | "blocked_beds" | "sellable_beds") => lines.reduce((total, line) => total + line[key], 0);
+        const sum = (key: "total_beds" | "out_of_service_beds" | "blocked_beds" | "sellable_beds" | "reserved_beds" | "remaining_beds") =>
+          lines.reduce((total, line) => total + line[key], 0);
         return (
           <div key={period.id} className="flex flex-col gap-3">
             <div>
@@ -93,6 +107,10 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
                       <span className="text-muted-foreground tabular-nums">
                         {line.total_beds} beds · {line.out_of_service_beds} out of service · {line.blocked_beds} blocked
                       </span>
+                      <span className="tabular-nums">
+                        {line.reserved_beds} reserved · {line.remaining_beds} left
+                        {line.overcommitted ? <span className="ml-2 font-semibold text-danger">Overbooked</span> : null}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -105,6 +123,8 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
                         <TableHead className="text-right">Out of service</TableHead>
                         <TableHead className="text-right">Blocked</TableHead>
                         <TableHead className="text-right">Sellable</TableHead>
+                        <TableHead className="text-right">Reserved</TableHead>
+                        <TableHead className="text-right">Left</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -115,6 +135,11 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
                           <TableCell className="text-right tabular-nums">{line.out_of_service_beds}</TableCell>
                           <TableCell className="text-right tabular-nums">{line.blocked_beds}</TableCell>
                           <TableCell className="text-right font-semibold tabular-nums">{line.sellable_beds}</TableCell>
+                          <TableCell className="text-right tabular-nums">{line.reserved_beds}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">
+                            {line.remaining_beds}
+                            {line.overcommitted ? <span className="ml-2 text-danger">Overbooked</span> : null}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -125,6 +150,8 @@ export default async function CapacityPage({ params }: PageProps<"/t/[tenantSlug
                         <TableCell className="text-right tabular-nums">{sum("out_of_service_beds")}</TableCell>
                         <TableCell className="text-right tabular-nums">{sum("blocked_beds")}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums">{sum("sellable_beds")}</TableCell>
+                        <TableCell className="text-right tabular-nums">{sum("reserved_beds")}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums">{sum("remaining_beds")}</TableCell>
                       </TableRow>
                     </TableFooter>
                   </Table>

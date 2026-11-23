@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-16 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-17 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -505,7 +505,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 14. Branded home, room list and detail, policies and contact pages — done locally (2026-11-23); migration `20261123110000` **not yet applied on hosted dev**; not yet exercised on hosted Supabase or Vercel
 - [x] 15. Mobile-first booking form and confirmation page — done locally (2026-11-23); migration `20261123120000` **not yet applied on hosted dev**; real email codes need D-9 for addresses outside the Supabase team
 - [x] 16. Booking lookup page — done locally (2026-11-23), no migration; **needs `LOG_REDACTION_SALT` on Vercel and migration `20261122220000` on hosted dev**
-- [ ] 17. Staff review queue and hold timer
+- [x] 17. Staff review queue and hold timer — done locally (2026-11-23), no migration; not yet exercised against hosted Supabase
 - [ ] 18. E2E, accessibility, performance and acceptance review
 
 ### Phase 3 decisions (product owner, in chat, 2026-11-22: "Approve defaults")
@@ -590,6 +590,20 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 16 | `npm run test:e2e:admin` (new `booking-status` spec at 1280 px and 360 px: keyboard use, statuses, uniform not-found, sixth attempt refused, other hostel, suspended hostel; axe WCAG 2.2 AA) | 64/64 passed |
 | 2026-11-23 | 16 | Mutation checks: (a) unknown status not handled; (b) waitlist message implies a place; (c) focus on the result removed | Tests failed each time, as expected; files restored |
 | 2026-11-23 | 16 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+| 2026-11-23 | 16 | **GitHub Actions CI** on `staging` (commit `0c94aa5`) | Passed |
+| 2026-11-23 | 17 | `npm test` (new `booking-review` tests: 35) | 649/649 passed |
+| 2026-11-23 | 17 | `npm run test:e2e:admin` (new `reservations` spec at 1280 px and 360 px: queue, search, review, reject, approve, no capacity, extend, confirm, cancel, ended period, capacity table, roles; axe WCAG 2.2 AA) | 82/82 passed. **Found and fixed:** the phone staff menu stayed open after choosing a link and covered the page |
+| 2026-11-23 | 17 | Mutation checks: (a) review buttons without permission; (b) cancel without permission; (c) approval after the period ended; (d) reject before review; (e) overdue hold shown as time left | Tests failed each time, as expected; file restored |
+| 2026-11-23 | 17 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+
+### Task 17 notes
+- `/t/{slug}/reservations`: tabs To review, Waitlist, Approved and Closed with counts, search by reference, 50 per page, oldest waiting request first. Requests whose period ended or booking window closed are flagged.
+- `/t/{slug}/reservations/{id}`: booking, student, remaining beds, hold timer and only the decisions the state and the person's permissions allow. Opening a page changes nothing: "Start review" is a deliberate button, because a page load must not write and link prefetching could trigger it.
+- The reject dialog says the student will see the reason. A `warning` from the action stays on screen until the page is left.
+- Student contact details need `residents.read`. Gender and student ID number are **not shown** here; the resident profile comes in Phase 4.
+- The Inventory capacity table now shows Reserved and Left, and marks a room type "Overbooked" when blocks leave fewer beds than live bookings.
+- The extension limit now has its own message.
+- The fake API proves the screens and actions work together, **not** RLS or the real RPCs. Those are covered by pgTAP 019-026 and `npm run test:db:parallel`. Nothing has run through these screens on hosted Supabase.
 
 ### Task 16 notes
 - `/booking-status` on each hostel site, linked from the header ("Check status") and the booking confirmation. It stays available while a hostel is suspended (D-16) and is marked `noindex`.

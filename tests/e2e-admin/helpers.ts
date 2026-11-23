@@ -11,6 +11,7 @@ const USERS = {
   accounts: "a5",
   suspended: "c1",
   student: "d1",
+  reviewer: "a6",
 } as const;
 export type Who = keyof typeof USERS;
 
@@ -36,9 +37,10 @@ export const resetData = async () => {
 };
 
 /** Made-up published hostel with rooms, photos, prices and periods. */
-export const seedPublicSite = async (options: { rules?: boolean } = {}) => {
+export const seedPublicSite = async (options: { rules?: boolean; bookings?: boolean } = {}) => {
   await fetch(`${API}/__reset`);
-  await fetch(`${API}/__seed-public${options.rules ? "?rules=1" : ""}`);
+  const query = new URLSearchParams({ ...(options.rules ? { rules: "1" } : {}), ...(options.bookings ? { bookings: "1" } : {}) });
+  await fetch(`${API}/__seed-public?${query}`);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
