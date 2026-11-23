@@ -39,6 +39,7 @@ export default defineConfig({
         NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${API_PORT}`,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "fake-anon-key-for-local-e2e-only",
         SUPABASE_SERVICE_ROLE_KEY: "fake-service-role-for-local-e2e-only",
+        LOG_REDACTION_SALT: "fake-lookup-secret-for-local-e2e-only",
         VERCEL_API_TOKEN: "",
         NEXT_PUBLIC_PLATFORM_ROOT_DOMAIN: "",
       },

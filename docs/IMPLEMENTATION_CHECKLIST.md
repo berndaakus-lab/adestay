@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-15 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-16 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -504,7 +504,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule yet; the project is on Vercel Hobby (at most daily)**
 - [x] 14. Branded home, room list and detail, policies and contact pages — done locally (2026-11-23); migration `20261123110000` **not yet applied on hosted dev**; not yet exercised on hosted Supabase or Vercel
 - [x] 15. Mobile-first booking form and confirmation page — done locally (2026-11-23); migration `20261123120000` **not yet applied on hosted dev**; real email codes need D-9 for addresses outside the Supabase team
-- [ ] 16. Booking lookup page
+- [x] 16. Booking lookup page — done locally (2026-11-23), no migration; **needs `LOG_REDACTION_SALT` on Vercel and migration `20261122220000` on hosted dev**
 - [ ] 17. Staff review queue and hold timer
 - [ ] 18. E2E, accessibility, performance and acceptance review
 
@@ -585,6 +585,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 15 | `npm run test:e2e:admin` (new `booking` spec at 1280 px and 360 px: keyboard-only sign-in and booking, errors, double submit, repeat request, hostel rules, waitlist, suspended; axe WCAG 2.2 AA at each step) | 46/46 passed |
 | 2026-11-23 | 15 | Mutation checks: (a) unpublished hostel exposed; (b) focus on the first error removed | Tests failed each time, as expected; files restored |
 | 2026-11-23 | 15 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+| 2026-11-23 | 15 | **GitHub Actions CI** on `staging` (commit `d0a43ce`) | Passed |
+| 2026-11-23 | 16 | `npm test` (new `booking-status-copy` tests: 17) | 614/614 passed. The new tests first found a bug: an unexpected status such as `constructor` matched a built-in JavaScript property; fixed |
+| 2026-11-23 | 16 | `npm run test:e2e:admin` (new `booking-status` spec at 1280 px and 360 px: keyboard use, statuses, uniform not-found, sixth attempt refused, other hostel, suspended hostel; axe WCAG 2.2 AA) | 64/64 passed |
+| 2026-11-23 | 16 | Mutation checks: (a) unknown status not handled; (b) waitlist message implies a place; (c) focus on the result removed | Tests failed each time, as expected; files restored |
+| 2026-11-23 | 16 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+
+### Task 16 notes
+- `/booking-status` on each hostel site, linked from the header ("Check status") and the booking confirmation. It stays available while a hostel is suspended (D-16) and is marked `noindex`.
+- `src/lib/booking-status-copy.ts` holds the student wording for each status, reusing the shared labels. Statuses that hold no place say so.
+- The reference is never put in a URL. A failed lookup removes the previous result from the screen.
+- **Acceptance criterion 5:** met at database level (pgTAP 025), in the action (unit tests) and through the page against the fake API. Not yet run on Vercel with the real forwarded IP or against hosted Supabase. All local browser traffic shares one rate-limit bucket.
 
 ### Task 15 notes
 - `/book?room=&period=`: not signed in, the student verifies their email with the existing 6-digit code form and returns to the same room and period. Signed in, they get `src/components/site/booking-form.tsx`. Only known rooms and periods reach the form or the return link.

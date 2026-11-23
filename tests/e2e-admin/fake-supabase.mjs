@@ -56,6 +56,13 @@ function seed() {
     bed_blocks: [],
     room_type_prices: [],
     booking_requests: [],
+    // Made-up bookings for the lookup page, kept apart so submitted references stay predictable.
+    lookup_bookings: [
+      ["ALD-SUBM1T", "submitted"], ["ALD-REV1EW", "under_review"], ["ALD-WA1TL5", "waitlisted"], ["ALD-APPR0V", "approved"], ["ALD-C0NF1R", "confirmed"],
+      ["ALD-CHECK1", "checked_in"], ["ALD-REJECT", "rejected"], ["ALD-CANCEL", "cancelled"], ["ALD-LAPSED", "lapsed"],
+    ].map(([reference, status]) => ({ tenant_id: T, reference, status, email: "ama@example.com", phone: "+233241234567" }))
+      .concat([{ tenant_id: S, reference: "CLO-7K3Q9P", status: "approved", email: "kofi@example.com", phone: "+233201234567" }]),
+    lookup_hits: {},
   };
 }
 seed();
@@ -155,6 +162,16 @@ function seedPublicSite() {
   db.room_type_prices = [price(1, 1, 450000, 100000), price(2, 1, 800000, 0), price(3, 1, 300000, 50000), price(4, 1, 100000, 0), price(1, 2, 60000, 0), price(1, 3, 99900, 0)];
 }
 
+// The behaviour of lookup_booking the page depends on (pgTAP 025 covers the real function).
+function lookupBooking(a) {
+  if (!/^[0-9a-f]{64}$/.test(a.p_client_key ?? "")) refuse("22023");
+  db.lookup_hits[a.p_client_key] = (db.lookup_hits[a.p_client_key] ?? 0) + 1;
+  if (db.lookup_hits[a.p_client_key] > 5) return [{ outcome: "rate_limited", booking_status: null }];
+  const reference = a.p_reference.toUpperCase().replace(/\s/g, "");
+  const booking = db.lookup_bookings.find((b) => b.tenant_id === a.p_tenant_id && b.reference === reference && (a.p_contact.includes("@") ? b.email === a.p_contact : b.phone === a.p_contact));
+  return booking ? [{ outcome: "found", booking_status: booking.status }] : [{ outcome: "not_found", booking_status: null }];
+}
+
 // The parts of submit_booking_request the form depends on (pgTAP 020 covers the real function).
 function submitBooking(a, uid) {
   if (!uid) refuse("42501");
@@ -233,6 +250,7 @@ const RPC = {
   room_type_capacity: (_a, uid) => capacity(uid),
   room_type_public_offers: publicOffers,
   submit_booking_request: submitBooking,
+  lookup_booking: lookupBooking,
   booking_form_rules: (a) => {
     const s = db.tenant_settings.find((x) => x.tenant_id === a.p_tenant_id);
     return s ? [{ student_id_required: s.student_id_required, gender_required: s.gender_policy_enforced }] : [];

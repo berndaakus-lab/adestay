@@ -115,6 +115,7 @@ async function Book({ params, searchParams }: Props) {
           genderRequired={Boolean(rule?.gender_required)}
           roomsHref={sitePath(site, "/rooms")}
           policiesHref={sitePath(site, "/policies")}
+          statusHref={sitePath(site, "/booking-status")}
         />
       </div>
     </div>

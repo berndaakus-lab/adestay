@@ -35,6 +35,9 @@ export function SiteHeader({ name, href, logoUrl }: { name: string; href: (path:
           <Button asChild variant="ghost" className="px-2 sm:px-3">
             <Link href={href("/contact")}>Contact</Link>
           </Button>
+          <Button asChild variant="ghost" className="px-2 sm:px-3">
+            <Link href={href("/booking-status")}>Check status</Link>
+          </Button>
         </nav>
       </div>
     </header>
