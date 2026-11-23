@@ -478,7 +478,7 @@ Build order: database (migrations + RLS + pgTAP) → server (actions, RPCs, vali
 - [x] Apply pending migrations on hosted dev (confirmed through `20261122190000` on 2026-11-22).
 - [ ] Set the Invite user email template (DEPLOYMENT_AND_OPERATIONS §3a).
 - [ ] D-1 root domain and wildcard on Vercel; D-9 email provider.
-- [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (Pro every 30 minutes, or Hobby daily).
+- [ ] Vercel: `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` (if on a team), `CRON_SECRET`; choose the domain-check schedule (the project is on Hobby as of 2026-11-23, so daily at most).
 - [x] `deposit_value` units decided 2026-11-22: used only for percent (whole number); a fixed deposit comes from each room price.
 - [ ] Decide whether staff who enrolled MFA voluntarily must also be enforced at database level.
 - [ ] Run and time the onboarding on staging (criterion 1), including one real upload and one real CSV import.
@@ -501,7 +501,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 10. Student code sign-in limits and request submission actions — submission done locally (2026-11-22), no migration; sign-in codes limited by Supabase Auth (product owner decision); **dashboard limits still to be set**
 - [x] 11. Rate-limited lookup action — done locally (2026-11-22), no migration; **needs `LOG_REDACTION_SALT` on Vercel** (task 11 notes)
 - [x] 12. Staff review actions — done locally (2026-11-23), no migration; screens come in task 17
-- [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule until the product owner confirms the Vercel plan**
+- [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule yet; the project is on Vercel Hobby (at most daily)**
 - [ ] 14. Branded home, room list and detail, policies and contact pages
 - [ ] 15. Mobile-first booking form and confirmation page
 - [ ] 16. Booking lookup page
@@ -581,7 +581,8 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - Runs up to 10 batches of 100, starts no new batch after 40 seconds, and stops if due rows are locked by staff. Remaining holds wait for the next run. Emails go 5 at a time. A failed run returns 500 so a scheduler can see it.
 - Migration `20261123100000_add_rate_limit_cleanup.sql`: `public.purge_expired_rate_limits()`, service role only, removes buckets over a day old.
 - An email that fails is not retried until the Phase 6 outbox.
-- **No `vercel.json` was added** (the product owner manages Vercel, and a 15-minute schedule makes a Hobby deployment fail). See DEPLOYMENT_AND_OPERATIONS §3b. Acceptance criterion 4 is met at database level (pgTAP 024); the real schedule is not running.
+- **No `vercel.json` was added** (the product owner manages Vercel). The project is on **Vercel Hobby** (product owner, 2026-11-23), so the approved 15-minute schedule cannot run and a daily run is the most it allows. See DEPLOYMENT_AND_OPERATIONS §3b. Acceptance criterion 4 is met at database level (pgTAP 024); the real schedule is not running.
+- [ ] **Product owner:** decide whether to add a daily schedule while on Hobby. Move to Vercel Pro and the 15-minute schedule before the first paying hostel goes live.
 
 ### Task 12 notes
 - `src/lib/server/actions/booking-review-actions.ts`: `startBookingReview`, `approveBooking`, `rejectBooking`, `waitlistBooking`, `cancelBooking`, `extendBookingHold`, `confirmBookingHold`. Bind the slug in the page. Each repeats host, session + MFA, membership and permission checks, then uses the staff member's session.

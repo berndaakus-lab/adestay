@@ -72,10 +72,12 @@ Vercel: no extra variables are needed for the staging host (the app reads Vercel
 
 | Job | Route | Intended schedule | Status |
 |---|---|---|---|
-| End overdue holds, email students, clean up rate-limit records | `/api/cron/expire-holds` | Every 15 minutes (`*/15 * * * *`, approved 2026-11-22; needs Vercel Pro) | Route built; **no schedule in the repository** |
+| End overdue holds, email students, clean up rate-limit records | `/api/cron/expire-holds` | Every 15 minutes (`*/15 * * * *`, approved 2026-11-22) once on Vercel Pro; at most daily on Hobby | Route built; **no schedule in the repository** |
 | Check pending custom domains | `/api/cron/verify-domains` | Every 30 minutes on Pro, or daily on Hobby | Route built; **no schedule in the repository** |
 
-Both need `CRON_SECRET` (16+ characters) and refuse every call without it. Vercel runs cron schedules on **production deployments only**, so staging must be triggered by hand with `Authorization: Bearer <CRON_SECRET>`. A schedule more frequent than daily makes a Hobby deployment fail, so the product owner must confirm the plan before a schedule is added.
+Both need `CRON_SECRET` (16+ characters) and refuse every call without it. Vercel runs cron schedules on **production deployments only**, so staging must be triggered by hand with `Authorization: Bearer <CRON_SECRET>`. A schedule more frequent than daily makes a Hobby deployment fail.
+
+**Current plan: Vercel Hobby (product owner, 2026-11-23).** The approved 15-minute hold-expiry schedule cannot run on it; at most one run per day per job is possible. With a daily run, an overdue hold frees its bed at the exact expiry time, but its status can show `held` and the "hold ended" email can be late by up to about a day. Vercel describes Hobby as non-commercial, so move to Pro and use the 15-minute schedule before the first paying hostel goes live.
 
 Without the job, overdue holds still stop counting against capacity, but their status stays `held` and students get no "hold ended" email.
 
