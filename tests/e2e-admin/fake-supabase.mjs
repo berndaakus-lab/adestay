@@ -8,7 +8,7 @@ const PORT = Number(process.env.FAKE_SUPABASE_PORT ?? 54399);
 const T = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const S = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const id = (suffix) => `00000000-0000-4000-8000-0000000000${suffix}`;
-const USERS = { platform: id("e1"), admin: id("a1"), manager: id("a2"), desk: id("a3"), pricer: id("a4"), accounts: id("a5"), suspended: id("c1") };
+const USERS = { platform: id("e1"), admin: id("a1"), manager: id("a2"), desk: id("a3"), pricer: id("a4"), accounts: id("a5"), suspended: id("c1"), student: id("d1") };
 const SET = { desk: "90000000-0000-4000-8000-000000000001", manager: "90000000-0000-4000-8000-000000000002", pricer: "90000000-0000-4000-8000-000000000003", accounts: "90000000-0000-4000-8000-000000000004" };
 const CATALOG = ["inventory.read", "inventory.manage", "pricing.manage", "settings.read", "settings.manage", "staff.manage", "audit.read"];
 
@@ -55,6 +55,7 @@ function seed() {
     beds: [],
     bed_blocks: [],
     room_type_prices: [],
+    booking_requests: [],
   };
 }
 seed();
@@ -154,6 +155,25 @@ function seedPublicSite() {
   db.room_type_prices = [price(1, 1, 450000, 100000), price(2, 1, 800000, 0), price(3, 1, 300000, 50000), price(4, 1, 100000, 0), price(1, 2, 60000, 0), price(1, 3, 99900, 0)];
 }
 
+// The parts of submit_booking_request the form depends on (pgTAP 020 covers the real function).
+function submitBooking(a, uid) {
+  if (!uid) refuse("42501");
+  const mine = db.booking_requests.filter((r) => r.user_id === uid && r.tenant_id === a.p_tenant_id);
+  const row = (r, created) => [{ request_id: r.id, booking_reference: r.reference, request_status: r.status, created }];
+  const retry = mine.find((r) => r.idempotency_key === a.p_idempotency_key);
+  if (retry) return row(retry, false);
+  const settings = db.tenant_settings.find((s) => s.tenant_id === a.p_tenant_id);
+  if (settings?.student_id_required && !a.p_student_id_number) refuse({ code: "22023", message: "enter your student ID number" });
+  if (settings?.gender_policy_enforced && !a.p_gender) refuse({ code: "22023", message: "choose a gender" });
+  if (mine.some((r) => r.booking_period_id === a.p_booking_period_id)) refuse({ code: "23505", message: "you already have a booking request for this period" });
+  const request = {
+    id: randomUUID(), tenant_id: a.p_tenant_id, user_id: uid, reference: `ALD-7K3Q${db.booking_requests.length}P`, status: "submitted",
+    booking_period_id: a.p_booking_period_id, room_type_id: a.p_room_type_id, idempotency_key: a.p_idempotency_key, full_name: a.p_full_name, phone: a.p_phone_e164, note: a.p_student_note,
+  };
+  db.booking_requests.push(request);
+  return row(request, true);
+}
+
 function importInventory(a, uid) {
   if (!has(uid, "inventory.manage")) refuse("42501");
   const errors = [];
@@ -212,6 +232,11 @@ const RPC = {
   can_upload_public_asset: (a, uid) => (a.p_name.includes("/branding/") ? has(uid, "settings.manage") : has(uid, "inventory.manage")),
   room_type_capacity: (_a, uid) => capacity(uid),
   room_type_public_offers: publicOffers,
+  submit_booking_request: submitBooking,
+  booking_form_rules: (a) => {
+    const s = db.tenant_settings.find((x) => x.tenant_id === a.p_tenant_id);
+    return s ? [{ student_id_required: s.student_id_required, gender_required: s.gender_policy_enforced }] : [];
+  },
   import_inventory: importInventory,
   invite_staff_member: (a, uid) => {
     if (!has(uid, "staff.manage")) refuse("42501");
@@ -417,7 +442,18 @@ http
       if (path === "/__state") return send(res, { db, objects: [...objects.keys()] });
       if (path === "/__seed-public") {
         seedPublicSite();
+        if (url.searchParams.get("rules") === "1") Object.assign(db.tenant_settings[0], { student_id_required: true, gender_policy_enforced: true });
         return send(res, {});
+      }
+      // The student's email code: 123456 is correct, and the token is unsigned like signIn's.
+      if (path === "/auth/v1/otp") return send(res, {});
+      if (path === "/auth/v1/verify") {
+        if (JSON.parse(raw).token !== "123456") return send(res, { code: 403, error_code: "otp_expired", msg: "Token has expired or is invalid" }, 403);
+        const b64 = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+        const exp = Math.floor(Date.now() / 1000) + 3600;
+        const user = { id: USERS.student, aud: "authenticated", role: "authenticated", email: "student@alder.test", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" };
+        const claims = { sub: USERS.student, email: user.email, role: "authenticated", aud: "authenticated", aal: "aal1", amr: [], session_id: "e2e", exp, iat: exp - 60 };
+        return send(res, { access_token: `${b64({ alg: "HS256", typ: "JWT" })}.${b64(claims)}.e2e`, refresh_token: "e2e", token_type: "bearer", expires_in: 3600, expires_at: exp, user });
       }
       if (path === "/auth/v1/user") {
         const uid = subject(req);
@@ -452,6 +488,7 @@ http
         try {
           return send(res, fn(raw.length ? JSON.parse(raw) : {}, subject(req)));
         } catch (error) {
+          if (error?.code && error.message) return send(res, { code: error.code, message: error.message, details: null, hint: null }, 400);
           return typeof error === "string" ? fail(res, 400, error) : fail(res, 500, "XX000");
         }
       }

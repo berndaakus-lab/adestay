@@ -10,6 +10,7 @@ const USERS = {
   pricer: "a4",
   accounts: "a5",
   suspended: "c1",
+  student: "d1",
 } as const;
 export type Who = keyof typeof USERS;
 
@@ -35,9 +36,9 @@ export const resetData = async () => {
 };
 
 /** Made-up published hostel with rooms, photos, prices and periods. */
-export const seedPublicSite = async () => {
+export const seedPublicSite = async (options: { rules?: boolean } = {}) => {
   await fetch(`${API}/__reset`);
-  await fetch(`${API}/__seed-public`);
+  await fetch(`${API}/__seed-public${options.rules ? "?rules=1" : ""}`);
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

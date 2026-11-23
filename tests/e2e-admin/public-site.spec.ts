@@ -5,7 +5,7 @@ import { audit, NOT_FOUND, open, resetData, seedPublicSite } from "./helpers";
 const SITE = "/sites/alder-house";
 
 test.describe.configure({ mode: "serial" });
-test.beforeEach(seedPublicSite);
+test.beforeEach(() => seedPublicSite());
 test.afterAll(resetData);
 
 test("a visitor browses the branded home page", async ({ page }) => {

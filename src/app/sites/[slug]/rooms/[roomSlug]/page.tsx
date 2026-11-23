@@ -105,6 +105,12 @@ async function RoomDetail({ params, searchParams }: Props) {
                       <dd>{offer.depositMinor > 0 ? <MoneyAmount pesewas={offer.depositMinor} className="font-semibold" /> : "None"}</dd>
                     </div>
                   </dl>
+                  <Button asChild className="mt-4 w-full" variant={offer.availability === "full" ? "outline" : "default"}>
+                    <Link href={sitePath(site, `/book?room=${encodeURIComponent(room.slug)}&period=${offer.periodId}`)}>
+                      {offer.availability === "full" ? "Join the waitlist" : "Request this room"}
+                      <span className="sr-only"> for {offer.periodName}</span>
+                    </Link>
+                  </Button>
                 </li>
               ))}
             </ul>

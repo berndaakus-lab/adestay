@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-14 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-15 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -503,7 +503,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 12. Staff review actions — done locally (2026-11-23), no migration; screens come in task 17
 - [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule yet; the project is on Vercel Hobby (at most daily)**
 - [x] 14. Branded home, room list and detail, policies and contact pages — done locally (2026-11-23); migration `20261123110000` **not yet applied on hosted dev**; not yet exercised on hosted Supabase or Vercel
-- [ ] 15. Mobile-first booking form and confirmation page
+- [x] 15. Mobile-first booking form and confirmation page — done locally (2026-11-23); migration `20261123120000` **not yet applied on hosted dev**; real email codes need D-9 for addresses outside the Supabase team
 - [ ] 16. Booking lookup page
 - [ ] 17. Staff review queue and hold timer
 - [ ] 18. E2E, accessibility, performance and acceptance review
@@ -580,6 +580,20 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 14 | `npm run test:e2e:admin` (new `public-site` spec at 1280 px and 360 px against the local fake API, axe WCAG 2.2 AA on each page) | 30/30 passed |
 | 2026-11-23 | 14 | Mutation checks: (a) deposit ignores the hostel rule; (b) offers skip the bookable filter; (c) unsafe colour accepted | Tests failed each time, as expected; files restored |
 | 2026-11-23 | 14 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+| 2026-11-23 | 14 | **GitHub Actions CI** on `staging` (commit `a588a09`) | Passed |
+| 2026-11-23 | 15 | `npm test` (new pgTAP 029 with 8 assertions) | 597/597 passed |
+| 2026-11-23 | 15 | `npm run test:e2e:admin` (new `booking` spec at 1280 px and 360 px: keyboard-only sign-in and booking, errors, double submit, repeat request, hostel rules, waitlist, suspended; axe WCAG 2.2 AA at each step) | 46/46 passed |
+| 2026-11-23 | 15 | Mutation checks: (a) unpublished hostel exposed; (b) focus on the first error removed | Tests failed each time, as expected; files restored |
+| 2026-11-23 | 15 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `CI=1 npx playwright test` | 0 problems / passed / succeeded / clean / 30/30 |
+
+### Task 15 notes
+- `/book?room=&period=`: not signed in, the student verifies their email with the existing 6-digit code form and returns to the same room and period. Signed in, they get `src/components/site/booking-form.tsx`. Only known rooms and periods reach the form or the return link.
+- The form keeps one idempotency key for its lifetime, keeps typed values on error, moves focus to the first problem, and moves focus to the confirmation heading on success. The reference is always shown, with a clear notice when no email went out.
+- Migration `20261123120000_add_booking_form_rules.sql`: `public.booking_form_rules(tenant)` returns only whether a student ID and gender are required. `submit_booking_request` still enforces both.
+- Room pages now have "Request this room", or "Join the waitlist" when full. A full room still accepts a request, which takes no capacity; staff decide whether to waitlist it.
+- **Acceptance criterion 1:** met locally with Playwright and axe at 360 px, keyboard only, with 0 axe violations. **No real screen reader (NVDA, TalkBack) was used**; labels and live regions are checked only through the accessibility tree. A manual pass belongs in the Phase 7 audit.
+- The email code, session and submission here run against the local fake API, not real Supabase Auth. Student sign-in on staging still needs the Magic Link template (`{{ .Token }}`).
+- The confirmation page has no status link until task 16.
 
 ### Task 14 notes
 - Public pages under `/sites/[slug]`: home, `/rooms` (period choice by link, no JavaScript needed), `/rooms/[roomSlug]`, `/policies`, `/contact`. Hostel logo, main photo and colours now show. House rules and terms are plain text, escaped by React.

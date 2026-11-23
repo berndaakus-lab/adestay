@@ -2,21 +2,11 @@ import Link from "next/link";
 import { BedDouble } from "lucide-react";
 import { MoneyAmount } from "@/components/money-amount";
 import { SiteImage } from "@/components/site/site-image";
-import type { Availability, PublicRoomType, RoomOffer } from "@/lib/server/tenant/public-content";
+import { AvailabilityBadge } from "@/components/site/availability-badge";
+import type { PublicRoomType, RoomOffer } from "@/lib/server/tenant/public-content";
 import { formatEmailDate } from "@/lib/server/email/booking-templates";
-import { cn } from "@/lib/utils";
 
-const AVAILABILITY: Record<Availability, { label: string; className: string }> = {
-  available: { label: "Available", className: "bg-success-bg text-success" },
-  limited: { label: "Limited", className: "bg-warning-bg text-warning" },
-  full: { label: "Fully booked", className: "bg-danger-bg text-danger" },
-};
-
-/** Never an exact count (D-4). */
-export function AvailabilityBadge({ availability }: { availability: Availability }) {
-  const { label, className } = AVAILABILITY[availability];
-  return <span className={cn("inline-flex rounded-sm px-2 py-1 text-xs font-semibold", className)}>{label}</span>;
-}
+export { AvailabilityBadge };
 
 export const periodDates = (offer: Pick<RoomOffer, "startsOn" | "endsOn">) => `${formatEmailDate(offer.startsOn)} to ${formatEmailDate(offer.endsOn)}`;
 export const occupancyLabel = (beds: number) => (beds === 1 ? "1 person per room" : `${beds} people per room`);
