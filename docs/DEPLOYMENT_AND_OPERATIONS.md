@@ -68,6 +68,17 @@ Set by the product owner in Supabase Dashboard → Authentication. Values for th
 
 Vercel: no extra variables are needed for the staging host (the app reads Vercel's runtime hostnames). Set `NEXT_PUBLIC_APP_HOST` once the root domain exists (e.g. `app.<domain>`).
 
+## 3b. Scheduled jobs
+
+| Job | Route | Intended schedule | Status |
+|---|---|---|---|
+| End overdue holds, email students, clean up rate-limit records | `/api/cron/expire-holds` | Every 15 minutes (`*/15 * * * *`, approved 2026-11-22; needs Vercel Pro) | Route built; **no schedule in the repository** |
+| Check pending custom domains | `/api/cron/verify-domains` | Every 30 minutes on Pro, or daily on Hobby | Route built; **no schedule in the repository** |
+
+Both need `CRON_SECRET` (16+ characters) and refuse every call without it. Vercel runs cron schedules on **production deployments only**, so staging must be triggered by hand with `Authorization: Bearer <CRON_SECRET>`. A schedule more frequent than daily makes a Hobby deployment fail, so the product owner must confirm the plan before a schedule is added.
+
+Without the job, overdue holds still stop counting against capacity, but their status stays `held` and students get no "hold ended" email.
+
 ## 4. CI/CD
 
 GitHub Actions (`.github/workflows/ci.yml`, implemented in Phase 1 task 8) on every push to `staging` and every pull request into `staging` or `main`. No secrets are needed.

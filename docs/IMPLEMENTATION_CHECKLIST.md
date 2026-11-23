@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **In progress: tasks 1-12 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **In progress: tasks 1-13 of 18 done locally.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -501,7 +501,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 10. Student code sign-in limits and request submission actions — submission done locally (2026-11-22), no migration; sign-in codes limited by Supabase Auth (product owner decision); **dashboard limits still to be set**
 - [x] 11. Rate-limited lookup action — done locally (2026-11-22), no migration; **needs `LOG_REDACTION_SALT` on Vercel** (task 11 notes)
 - [x] 12. Staff review actions — done locally (2026-11-23), no migration; screens come in task 17
-- [ ] 13. Secured hold-expiry job
+- [x] 13. Secured hold-expiry job — done locally (2026-11-23); migration `20261123100000` **not yet applied on hosted dev**; **no schedule until the product owner confirms the Vercel plan**
 - [ ] 14. Branded home, room list and detail, policies and contact pages
 - [ ] 15. Mobile-first booking form and confirmation page
 - [ ] 16. Booking lookup page
@@ -571,6 +571,17 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 12 | `npm test` (new `booking-review-actions` tests: 63) | 567/567 passed |
 | 2026-11-23 | 12 | Mutation checks: (a) hostel check removed; (b) hostel filter removed; (c) cancel uses review permission; (d) permission check removed; (e) email failure hidden; (f) refused decision treated as done; (g) no-email warning removed | Tests failed each time, as expected; file restored |
 | 2026-11-23 | 12 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+| 2026-11-23 | 13 | `npm test` (new `expire-holds` tests: 19; new pgTAP 027 with 9 assertions) | 587/587 passed |
+| 2026-11-23 | 13 | Mutation checks: (a) route not authorised; (b) emails not via job path; (c) spins on locked rows; (d) time budget ignored; (e) failed run returns 200; (f) purge removes live buckets; (g) users can purge | Tests failed each time, as expected; files restored |
+| 2026-11-23 | 13 | Live production server, `/api/cron/expire-holds`, no Supabase keys: no header, wrong secret, right secret | 401 / 401 / 500 `Job failed`, all `no-store`. The 500 is expected without a database; a successful run has **not** been exercised against a real database through this route |
+| 2026-11-23 | 13 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
+
+### Task 13 notes
+- `src/app/api/cron/expire-holds/` (`route.ts`, `job.ts`), inside the existing cron service-role allow-list. Needs `Authorization: Bearer <CRON_SECRET>` and returns counts only.
+- Runs up to 10 batches of 100, starts no new batch after 40 seconds, and stops if due rows are locked by staff. Remaining holds wait for the next run. Emails go 5 at a time. A failed run returns 500 so a scheduler can see it.
+- Migration `20261123100000_add_rate_limit_cleanup.sql`: `public.purge_expired_rate_limits()`, service role only, removes buckets over a day old.
+- An email that fails is not retried until the Phase 6 outbox.
+- **No `vercel.json` was added** (the product owner manages Vercel, and a 15-minute schedule makes a Hobby deployment fail). See DEPLOYMENT_AND_OPERATIONS §3b. Acceptance criterion 4 is met at database level (pgTAP 024); the real schedule is not running.
 
 ### Task 12 notes
 - `src/lib/server/actions/booking-review-actions.ts`: `startBookingReview`, `approveBooking`, `rejectBooking`, `waitlistBooking`, `cancelBooking`, `extendBookingHold`, `confirmBookingHold`. Bind the slug in the page. Each repeats host, session + MFA, membership and permission checks, then uses the staff member's session.
