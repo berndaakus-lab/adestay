@@ -5,11 +5,21 @@ import { SiteFooter, SiteHeader } from "@/components/site/site-chrome";
 import { brandStyle } from "@/lib/brand-style";
 import { publicAssetUrl } from "@/lib/server/tenant/public-content";
 import { getPublicTenantProfile, getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath } from "@/lib/server/tenant/site";
 
-export async function generateMetadata({ params }: LayoutProps<"/sites/[slug]">): Promise<Metadata> {
-  const { slug } = await params;
-  const site = await getSiteTenant(slug);
+/**
+ * Hostels are not known at build time. Next.js needs one value per parameter to check the route and
+ * to store each real hostel's pages after their first visit (generateStaticParams docs, "With Cache
+ * Components"). The underscore can never be a hostel slug, so this placeholder is always a 404.
+ */
+export function generateStaticParams() {
+  return [{ slug: "_placeholder" }];
+}
+
+export async function generateMetadata({ params }: LayoutProps<"/site/[mode]/[slug]">): Promise<Metadata> {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) return {};
   const [name, profile] = await Promise.all([getTenantDisplayName(site.tenant), getPublicTenantProfile(site.tenant)]);
   return {
@@ -20,9 +30,9 @@ export async function generateMetadata({ params }: LayoutProps<"/sites/[slug]">)
 
 // Public hostel site shell. Reached by rewrite from the hostel's own domain, or directly as a
 // staging preview (/sites/{slug}) outside production.
-async function SiteFrame({ params, children }: { params: LayoutProps<"/sites/[slug]">["params"]; children: ReactNode }) {
-  const { slug } = await params;
-  const site = await getSiteTenant(slug);
+async function SiteFrame({ params, children }: { params: LayoutProps<"/site/[mode]/[slug]">["params"]; children: ReactNode }) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const [name, profile] = await Promise.all([getTenantDisplayName(site.tenant), getPublicTenantProfile(site.tenant)]);
   const href = (path: string) => sitePath(site, path);
@@ -44,7 +54,7 @@ async function SiteFrame({ params, children }: { params: LayoutProps<"/sites/[sl
   );
 }
 
-export default function SiteLayout({ children, params }: LayoutProps<"/sites/[slug]">) {
+export default function SiteLayout({ children, params }: LayoutProps<"/site/[mode]/[slug]">) {
   return (
     <Suspense fallback={<div className="min-h-dvh flex-1" aria-busy="true" />}>
       <SiteFrame params={params}>{children}</SiteFrame>

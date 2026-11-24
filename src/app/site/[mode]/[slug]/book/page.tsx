@@ -17,24 +17,49 @@ import { getSessionUser } from "@/lib/server/auth";
 import { getPublicSupabaseClient } from "@/lib/server/supabase/public";
 import { getPublicRooms } from "@/lib/server/tenant/public-content";
 import { getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath } from "@/lib/server/tenant/site";
 
 export const metadata: Metadata = { title: "Request a room" };
 
-type Props = PageProps<"/sites/[slug]/book">;
+type Props = PageProps<"/site/[mode]/[slug]/book">;
+
+const openRooms = async (tenant: Parameters<typeof getPublicRooms>[0]) =>
+  (await getPublicRooms(tenant)).filter((r) => r.offers.length > 0);
+
+/**
+ * The heading and lead use cached hostel content only, so they are part of the stored page and
+ * paint at once. The rest needs the visitor's choice and session, so it streams in after.
+ */
+async function BookHeader({ params }: Pick<Props, "params">) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
+  if (!site || site.tenant.status === "suspended") return null;
+  const [name, rooms] = await Promise.all([getTenantDisplayName(site.tenant), openRooms(site.tenant)]);
+  return (
+    <div className="mx-auto w-full max-w-2xl px-4 pt-12">
+      <p className="eyebrow mb-3">{name}</p>
+      <h1 className="text-4xl md:text-5xl">Request a room</h1>
+      {rooms.length ? (
+        <p className="mt-4 text-lg">
+          Send a request for the room and period you want. {name} reviews every request and tells you the decision.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 async function Book({ params, searchParams }: Props) {
-  const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const site = await getSiteTenant(slug);
+  const [{ mode, slug }, query] = await Promise.all([params, searchParams]);
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const name = await getTenantDisplayName(site.tenant);
   if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
 
-  const rooms = (await getPublicRooms(site.tenant)).filter((r) => r.offers.length > 0);
+  const rooms = await openRooms(site.tenant);
   if (!rooms.length) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-12">
-        <h1 className="text-4xl">Request a room</h1>
+      <div className="mx-auto w-full max-w-2xl px-4 pb-12">
         <div className="mt-8 rounded-lg border border-border bg-card">
           <EmptyState
             icon={<BedDouble />}
@@ -59,9 +84,7 @@ async function Book({ params, searchParams }: Props) {
   const user = await getSessionUser();
   if (!user) {
     return (
-      <div className="mx-auto w-full max-w-xl px-4 py-12">
-        <p className="eyebrow mb-3">{name}</p>
-        <h1 className="text-4xl md:text-5xl">Request a room</h1>
+      <div className="mx-auto w-full max-w-2xl px-4 pb-12">
         <p className="mt-4 text-muted-foreground">
           You are requesting <strong className="text-foreground">{room.name}</strong> for {offer.periodName}. First, confirm your email address.
         </p>
@@ -93,9 +116,7 @@ async function Book({ params, searchParams }: Props) {
   );
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-12">
-      <p className="eyebrow mb-3">{name}</p>
-      <h1 className="text-4xl md:text-5xl">Request a room</h1>
+    <div className="mx-auto w-full max-w-2xl px-4 pb-12">
       <form action={signOut} className="mt-3 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
         <input type="hidden" name="redirectTo" value={bookPath} />
         <span className="break-all">Verified as {user.email}.</span>
@@ -124,8 +145,8 @@ async function Book({ params, searchParams }: Props) {
 
 function BookSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-12" aria-busy="true">
-      <Skeleton className="h-12 w-3/4" />
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 pt-4 pb-12" aria-busy="true">
+      <Skeleton className="h-6 w-3/4" />
       <Skeleton className="h-96 w-full" />
     </div>
   );
@@ -133,8 +154,13 @@ function BookSkeleton() {
 
 export default function BookPage(props: Props) {
   return (
-    <Suspense fallback={<BookSkeleton />}>
-      <Book {...props} />
-    </Suspense>
+    <>
+      <Suspense>
+        <BookHeader params={props.params} />
+      </Suspense>
+      <Suspense fallback={<BookSkeleton />}>
+        <Book {...props} />
+      </Suspense>
+    </>
   );
 }

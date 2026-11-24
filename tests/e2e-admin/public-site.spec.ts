@@ -45,7 +45,7 @@ test("a room page shows photos, amenities, prices and deposits", async ({ page }
   await open(page, `${SITE}/rooms`);
   await page.getByRole("link", { name: "Two in a room" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Two in a room" })).toBeVisible();
-  await expect(page).toHaveTitle(/Two in a room · Alder House/);
+  await expect(page).toHaveTitle("Room details · Alder House");
   await expect(page.getByRole("img", { name: "Two beds by a bright window" })).toBeVisible();
   await expect(page.getByText("Study desk")).toBeVisible();
   const year = page.getByRole("listitem").filter({ hasText: "2040/41 Academic Year" });

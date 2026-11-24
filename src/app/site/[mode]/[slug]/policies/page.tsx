@@ -8,13 +8,14 @@ import { SuspendedNotice } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPublicTenantProfile, getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath } from "@/lib/server/tenant/site";
 
 export const metadata: Metadata = { title: "Policies" };
 
-async function Policies({ params }: { params: PageProps<"/sites/[slug]/policies">["params"] }) {
-  const { slug } = await params;
-  const site = await getSiteTenant(slug);
+async function Policies({ params }: { params: PageProps<"/site/[mode]/[slug]/policies">["params"] }) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const name = await getTenantDisplayName(site.tenant);
   if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
@@ -55,7 +56,7 @@ async function Policies({ params }: { params: PageProps<"/sites/[slug]/policies"
   );
 }
 
-export default function PoliciesPage({ params }: PageProps<"/sites/[slug]/policies">) {
+export default function PoliciesPage({ params }: PageProps<"/site/[mode]/[slug]/policies">) {
   return (
     <Suspense fallback={<div className="mx-auto w-full max-w-3xl px-4 py-16" aria-busy="true"><Skeleton className="h-64 w-full" /></div>}>
       <Policies params={params} />

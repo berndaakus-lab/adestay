@@ -11,7 +11,7 @@
 | 0: Architecture & Planning | **Approved** | Product owner, in chat, 2026-10-26 |
 | 1: Foundation & Security | **Complete; accepted by the product owner with open hosted items carried into Phase 2 (see "Open before Phase 1 sign-off")** | Approved to start 2026-10-26; accepted 2026-11-14 (product owner, in chat) |
 | 2: Tenant setup & Administration | **All 14 tasks built and tested locally; hosted acceptance pending** (see "Phase 2 acceptance criteria"). Not signed off | Product owner, in chat, 2026-11-14 |
-| 3: Public sites & Booking | **All 18 tasks built and reviewed locally; acceptance criterion 6 (page speed) NOT met; hosted acceptance pending. Not signed off.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
+| 3: Public sites & Booking | **All 18 tasks built and reviewed locally; acceptance criterion 6 (page speed) met on 6 of 7 pages after per-hostel rendering (Home still about 3.1 s); hosted acceptance pending. Not signed off.** Started while Phase 2 hosted acceptance is still open. Decision defaults approved 2026-11-22 (see "Phase 3 decisions") | Product owner, in chat, 2026-11-22 ("Start Phase 3 now") |
 | 4: Student portal & Allocation | Not started | — |
 | 5a: Invoices & manual payments | Not started (split approved 2026-10-26) | — |
 | 5b: Gateway integration | Not started (split approved 2026-10-26) | — |
@@ -506,7 +506,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - [x] 15. Mobile-first booking form and confirmation page — done locally (2026-11-23); migration `20261123120000` **not yet applied on hosted dev**; real email codes need D-9 for addresses outside the Supabase team
 - [x] 16. Booking lookup page — done locally (2026-11-23), no migration; **needs `LOG_REDACTION_SALT` on Vercel and migration `20261122220000` on hosted dev**
 - [x] 17. Staff review queue and hold timer — done locally (2026-11-23), no migration; not yet exercised against hosted Supabase
-- [~] 18. E2E, accessibility, performance and acceptance review — review done (2026-11-23); **criterion 6 not met**, see "Phase 3 acceptance criteria"
+- [~] 18. E2E, accessibility, performance and acceptance review — review done (2026-11-23); per-hostel rendering done (2026-11-24, "Fix rendering now"); **criterion 6 met on 6 of 7 pages, Home not**, see "Phase 3 acceptance criteria"
 
 ### Phase 3 decisions (product owner, in chat, 2026-11-22: "Approve defaults")
 - D-3 holds (120 h, 1 extension, deposit paid = confirmed); D-4 indicator (Limited = 3 or fewer); D-5 no-show (7 days, Phase 4); D-7 refunds (Phase 5a); D-11 no Turnstile for now; D-14 gender off unless the first hostel separates rooms.
@@ -602,6 +602,15 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 2026-11-23 | 18 | Temporary browser check with the cache on | A cached page kept old content, and a staff profile change cleared it at once |
 | 2026-11-23 | 18 | `npm test`; `npm run test:db:parallel`; `npm run test:e2e:admin`; `CI=1 npx playwright test` | 652/652; 8/8; 82/82; 30/30 |
 | 2026-11-23 | 18 | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle`, `npm audit --omit=dev --audit-level=high` | 0 problems / passed / succeeded / clean / 0 vulnerabilities |
+| 2026-11-24 | 18 (rendering) | Probe of the production build after per-hostel rendering | Home, Room details, Policies, Contact and Booking status return `x-nextjs-cache: HIT` in 8-14 ms after the first visit, content in the HTML. Rooms and Request a room read the query, so they stream a stored shell (26-62 ms) |
+| 2026-11-24 | 18 (rendering) | `npm run test:perf`, old lab setup (photos from a second origin, with the 150 ms database delay), median of 3 | **Fails.** LCP / score: Home 3064 / 84, Rooms 2893 / 86, Room details 2154 / 85, Policies 782 / 91, Contact 777 / 89, Booking status 786 / 91, Request a room 3428 / 81 |
+| 2026-11-24 | 18 (rendering) | Same, after moving the booking page heading into the stored page | Request a room LCP 3428 → 775-793 ms |
+| 2026-11-24 | 18 (rendering) | `npm run test:perf`, new lab setup (pages, photos and API on one origin as on Vercel; photos not delayed, database still 150 ms), median of 5 | **Fails on Home only.** LCP / score: Home 3099 / 93, Rooms 2441 / 97, Room details 2433 / 97, Policies 770 / 99, Contact 772 / 100, Booking status 775 / 99, Request a room 776 / 99 |
+| 2026-11-24 | 18 (rendering) | `PERF_PHOTO_DELAY=1 npm run test:perf` (one origin, photos also delayed 150 ms), median of 5 | **Fails.** Home 2962 / 94, Rooms 3090 / 93, Room details 3037 / 94; the four text pages 774-775 / 99-100 |
+| 2026-11-24 | 18 (rendering) | `PERF_THROTTLING=devtools npm run test:perf` (old lab setup) | **Fails on every page.** LCP 2752-8789 ms, scores 31-64. With 562 ms per round trip even a stored text page cannot paint in 2.5 s; recorded for information, criterion 6 names the simulated method |
+| 2026-11-24 | 18 (rendering) | Experiment: Inter font not preloaded | No change (Home 3090 ms); reverted |
+| 2026-11-24 | 18 (rendering) | `npm test`; `npm run test:db:parallel`; `npm run test:e2e:admin`; `npm run test:e2e` | 657/657; 8/8; 82/82; 30/30 |
+| 2026-11-24 | 18 (rendering) | `npm run lint`, `npm run typecheck`, `npm run build`, `npm run check:bundle` | 0 problems / passed / succeeded / clean |
 
 ### Phase 3 acceptance criteria (IMPLEMENTATION_PLAN §2)
 | # | Criterion | Status | Evidence |
@@ -611,7 +620,7 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 | 3 | Double-submit with one key returns the same reference | **Met locally** | Parallel test (20 submits), pgTAP 020, `booking.spec.ts` |
 | 4 | Holds expire within one job interval and release capacity (controlled clock) | **Met at database level** | pgTAP 024, parallel tests. **No schedule is running** (Vercel Hobby), and the job route has not completed a run against a real database |
 | 5 | Lookup is status only, needs reference + contact, is rate-limited | **Met locally** | pgTAP 025, unit tests, `booking-status.spec.ts`. Needs `LOG_REDACTION_SALT`; not run on Vercel |
-| 6 | Public pages LCP < 2.5 s on simulated slow 4G, Lighthouse mobile ≥ 85 | **NOT MET** | Score target met on all 7 pages; LCP target met on 4 of 7. Home, Rooms and Room details take 2.85-3.0 s. Lab result only |
+| 6 | Public pages LCP < 2.5 s on simulated slow 4G, Lighthouse mobile ≥ 85 | **NOT MET (6 of 7)** | Scores 93-100 on all 7 pages. LCP under 2.5 s on 6 of 7 in the one-origin lab; Home about 3.1 s. Rooms and Room details are 2.43-2.44 s, close to the limit, and over it when photos are also delayed. Lab result only |
 
 ### Task 18 notes
 - `npm run test:perf` (`scripts/check-public-performance.mjs`) measures seven public pages against the production build. Run `npm run build` first. Lighthouse 13.6.0 is a pinned dev dependency. CI does not run it. The script's limits: fake API, photos pre-sized to 750 px because the optimizer refuses local addresses, no CDN.
@@ -619,8 +628,16 @@ Build order: database (migrations + RLS + pgTAP) → server → UI. Phase 2 rema
 - **Cache behaviour to know:** staff changes appear at once. A hold that expires through the job can take up to about a minute to change the public indicator. Bookings never rely on the cache: the database re-reads price, deposit and capacity.
 - **Why photo pages remain slow:** the hostel is chosen from the request, so the first HTML is a generic shell and the photo address arrives in the streamed part, after the scripts have been queued. A real fix would put each hostel's main content in its first response (per-hostel static rendering), which is a larger change to routing and caching.
 
+### Per-hostel rendering (2026-11-24, "Fix rendering now")
+- The proxy rewrites public hostel pages to an internal path, `/site/live/{slug}/…` on a hostel domain and `/site/preview/{slug}/…` for `/sites/{slug}` on staging, and refuses `/site/…` asked for directly. Public pages read the hostel from that path (`src/lib/server/tenant/public-site.ts`, `getPublicSite`), so Next.js stores each hostel's pages after the first visit. The portal keeps the header check. ADR-0005 and SYSTEM_ARCHITECTURE §4 updated.
+- Placeholder parameters (`_placeholder`, never a valid slug) let Next.js store real hostels' pages; the placeholder is always a 404. The public cache now has `stale` 300 s and `expire` 3600 s, because shorter values keep a cache out of stored pages. `revalidate` stays 60 s and staff changes still clear it at once.
+- **Visible changes:** the room page title is now "Room details · {hostel}" (a title naming the room would stop the page being stored); room links no longer carry the chosen period, and the room page no longer highlights it. The booking page shows its heading and a short lead at once, then the form.
+- **Lab change:** `npm run test:perf` now serves pages, photos and the fake API from one origin, as Vercel serves photos from `/_next/image`, and photos skip the database delay. `PERF_PHOTO_DELAY=1` keeps the stricter setup. Both results are recorded above.
+- **Why Home is still slow:** the stored page arrives in about 10 ms, but the full-width hero photo paints after the page's scripts start, so Lighthouse's estimate counts the script work too. Not preloading the body font changed nothing.
+
 ### Open before Phase 3 sign-off (product owner)
-- [ ] Decide how to handle criterion 6: measure on real staging first (recommended), or do the per-hostel rendering work now.
+- [ ] Criterion 6 for Home (about 3.1 s): measure on staging with the real image optimizer once the migrations are applied, or approve a design change for phones (for example the hero photo below the heading instead of behind it). Rooms and Room details are close to the limit too.
+- [ ] Confirm the internal-path change to tenant resolution (ADR-0005 step 3-4): public pages trust the proxy's internal path for published content only.
 - [ ] Apply the 8 pending migrations: `npm run db:bundle -- --since 20261122190000 --no-seed` (unless some are already applied).
 - [ ] Vercel: `LOG_REDACTION_SALT`, `CRON_SECRET`; move to Pro and add the 15-minute hold-expiry schedule before the first paying hostel.
 - [ ] D-1 root domain and D-9 email provider, then connect the email transport (`src/lib/server/email/send.ts`).

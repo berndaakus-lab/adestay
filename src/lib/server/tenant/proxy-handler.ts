@@ -6,6 +6,7 @@ import {
   HEADER_TENANT_SLUG,
   HEADER_TENANT_STATUS,
   INTERNAL_HEADER_PREFIX,
+  INTERNAL_SITE_PREFIX,
   isPathOnSurface,
   normalizeHost,
   SITES_PREFIX,
@@ -38,8 +39,10 @@ const isUnder = (path: string, prefix: string) => path === prefix || path.starts
  * 1. strip any inbound internal headers, so a client can never inject a tenant;
  * 2. app host -> staff/platform surface (plus /sites previews outside production);
  * 3. any other host must be a verified tenant domain (otherwise the "hostel not found" page) and is
- *    rewritten internally to /sites/{slug}/... so public pages have their own route tree.
- * The headers are a routing hint only: server code re-resolves before using them.
+ *    rewritten internally to /site/live/{slug}/... so public pages have their own route tree.
+ * Staging previews (/sites/{slug}/...) are rewritten to /site/preview/{slug}/... The internal tree
+ * is never reachable directly, so its path is trusted to select public content only. The headers
+ * are a routing hint: code that touches private data re-resolves the host itself.
  */
 export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps): Promise<NextResponse> {
   const next = deps.next ?? continueRequest;
@@ -56,10 +59,17 @@ export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps):
   const noStore = { "cache-control": "private, no-store" };
   const notFound = () => NextResponse.rewrite(new URL("/not-found-page", request.url), { status: 404, headers: noStore });
 
+  // The internal site tree is reachable only through the rewrites below.
+  if (isUnder(pathname, INTERNAL_SITE_PREFIX)) return notFound();
+
   if (classifyHost(host, { appHosts: deps.appHosts }) === "app") {
     if (!isPathOnSurface(pathname, "app")) return notFound();
-    if (isUnder(pathname, SITES_PREFIX) && !deps.tenantPreview) return notFound();
     headers.set(HEADER_SURFACE, "app");
+    if (isUnder(pathname, SITES_PREFIX)) {
+      if (!deps.tenantPreview) return notFound();
+      const preview = new URL(`${INTERNAL_SITE_PREFIX}/preview${pathname.slice(SITES_PREFIX.length)}${search}`, request.url);
+      return next(request, headers, preview);
+    }
     return next(request, headers);
   }
 
@@ -78,6 +88,6 @@ export async function handleProxyRequest(request: NextRequest, deps: ProxyDeps):
   headers.set(HEADER_TENANT_ID, tenant.id);
   headers.set(HEADER_TENANT_SLUG, tenant.slug);
   headers.set(HEADER_TENANT_STATUS, tenant.status);
-  const target = new URL(`${SITES_PREFIX}/${tenant.slug}${pathname === "/" ? "" : pathname}${search}`, request.url);
+  const target = new URL(`${INTERNAL_SITE_PREFIX}/live/${tenant.slug}${pathname === "/" ? "" : pathname}${search}`, request.url);
   return next(request, headers, target);
 }

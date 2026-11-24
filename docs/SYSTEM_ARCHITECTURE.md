@@ -101,7 +101,7 @@ sequenceDiagram
 ```
 
 Rules:
-1. **The tenant is resolved from the Host header on the server.** Any tenant ID in a URL, form field or header from the browser is treated as a selection to be checked, never as proof of access.
+1. **The tenant is resolved from the Host header on the server.** Any tenant ID in a URL, form field or header from the browser is treated as a selection to be checked, never as proof of access. Public hostel pages are rewritten by the proxy to the internal path `/site/{live|preview}/{slug}/…`, which the proxy refuses when a browser asks for it directly; that path only selects published content and stores each hostel's pages (ADR-0005). The portal and private data keep the header check.
 2. Staff routes include `tenantSlug` in the path. The server checks that the signed-in user has an active membership in that tenant (`requireTenantMember`) and the RLS policies check it again independently.
 3. Every query runs with the **user's JWT** through `@supabase/ssr`, so RLS applies. The **service-role client** may only be imported by an allow-listed set of modules: payment webhooks, cron jobs, booking lookup, platform tenant provisioning, and the public-image upload module (after a permission check with the user's session). A lint rule plus a unit test enforce the list.
 4. Server Actions validate every input with Zod, call `requirePermission`, and run multi-row state changes through **Postgres functions (RPCs)**, so each workflow step is one transaction.

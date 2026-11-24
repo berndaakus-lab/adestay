@@ -45,8 +45,15 @@ export const HEADER_TENANT_STATUS = "x-adestay-tenant-status";
 const TENANT_ONLY_PREFIXES = ["/portal"];
 const APP_ONLY_PREFIXES = ["/sign-in", "/forgot-password", "/reset-password", "/mfa", "/account", "/auth", "/t", "/platform", "/design-system"];
 
-/** Internal route tree for hostel sites; tenant hosts are rewritten to /sites/{slug}/... */
+/** The staging preview address of a hostel site on the app host: /sites/{slug}/... */
 export const SITES_PREFIX = "/sites";
+
+/**
+ * Internal route tree for hostel sites: /site/{live|preview}/{slug}/... Only the proxy can reach
+ * it, by rewriting; a request that names it directly gets a 404 on every host. The path therefore
+ * carries a hostel the proxy has already checked, so public pages can be rendered once and stored.
+ */
+export const INTERNAL_SITE_PREFIX = "/site";
 
 function matchesPrefix(path: string, prefixes: string[]): boolean {
   return prefixes.some((p) => path === p || path.startsWith(`${p}/`));

@@ -156,20 +156,32 @@ describe("hostel site rewrites", () => {
     return target ? new URL(target).pathname + new URL(target).search : null;
   };
 
-  it("rewrites a hostel domain to its internal /sites/{slug} route, keeping the query", async () => {
+  it("rewrites a hostel domain to its internal /site/live/{slug} route, keeping the query", async () => {
     const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/portal/sign-in?next=%2Fportal"), deps());
-    expect(rewrittenTo(res)).toBe("/sites/alder-house/portal/sign-in?next=%2Fportal");
+    expect(rewrittenTo(res)).toBe("/site/live/alder-house/portal/sign-in?next=%2Fportal");
     expect(forwarded(res, "x-adestay-tenant-id")).toBe(ALDER.id);
   });
 
-  it("rewrites the hostel home page to /sites/{slug}", async () => {
+  it("rewrites the hostel home page to /site/live/{slug}", async () => {
     const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/"), deps());
-    expect(rewrittenTo(res)).toBe("/sites/alder-house");
+    expect(rewrittenTo(res)).toBe("/site/live/alder-house");
   });
 
   it("refuses /sites paths typed on a hostel domain (no nested or cross-hostel routes)", async () => {
     const res = await handleProxyRequest(request("book.alderhouse.com.gh", {}, "/sites/closed-hostel"), deps());
     expect(res.status).toBe(404);
+  });
+
+  it.each([
+    ["book.alderhouse.com.gh", "/site/live/closed-hostel"],
+    ["book.alderhouse.com.gh", "/site/preview/alder-house"],
+    ["book.alderhouse.com.gh", "/site"],
+    ["app.adestay.test", "/site/live/alder-house"],
+    ["app.adestay.test", "/site/preview/alder-house/rooms"],
+  ])("never lets %s reach the internal tree directly: %s", async (host, path) => {
+    const res = await handleProxyRequest(request(host, {}, path), deps({ tenantPreview: true }));
+    expect(res.status).toBe(404);
+    expect(rewrittenTo(res)).toBe("/not-found-page");
   });
 
   it("serves unknown hosts the hostel-not-found page with a 404 status", async () => {
@@ -181,8 +193,9 @@ describe("hostel site rewrites", () => {
   it("allows /sites previews on the app host only when preview is enabled", async () => {
     const blocked = await handleProxyRequest(request("app.adestay.test", {}, "/sites/alder-house"), deps({ tenantPreview: false }));
     expect(blocked.status).toBe(404);
-    const allowed = await handleProxyRequest(request("app.adestay.test", {}, "/sites/alder-house"), deps({ tenantPreview: true }));
+    const allowed = await handleProxyRequest(request("app.adestay.test", {}, "/sites/alder-house/rooms?period=x"), deps({ tenantPreview: true }));
     expect(allowed.status).toBe(200);
+    expect(rewrittenTo(allowed)).toBe("/site/preview/alder-house/rooms?period=x");
     expect(forwarded(allowed, "x-adestay-surface")).toBe("app");
   });
 });

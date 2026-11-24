@@ -11,11 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPublicRooms, publicAssetUrl } from "@/lib/server/tenant/public-content";
 import { getPublicTenantProfile, getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath } from "@/lib/server/tenant/site";
 
-async function HostelHome({ params }: { params: PageProps<"/sites/[slug]">["params"] }) {
-  const { slug } = await params;
-  const site = await getSiteTenant(slug);
+async function HostelHome({ params }: { params: PageProps<"/site/[mode]/[slug]">["params"] }) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const name = await getTenantDisplayName(site.tenant);
   if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
@@ -93,7 +94,7 @@ function HomeSkeleton() {
   );
 }
 
-export default function HostelHomePage({ params }: PageProps<"/sites/[slug]">) {
+export default function HostelHomePage({ params }: PageProps<"/site/[mode]/[slug]">) {
   return (
     <Suspense fallback={<HomeSkeleton />}>
       <HostelHome params={params} />

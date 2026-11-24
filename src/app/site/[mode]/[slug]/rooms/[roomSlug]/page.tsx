@@ -11,22 +11,23 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getPublicRooms } from "@/lib/server/tenant/public-content";
 import { getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
-import { cn } from "@/lib/utils";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath } from "@/lib/server/tenant/site";
 
-type Props = PageProps<"/sites/[slug]/rooms/[roomSlug]">;
+type Props = PageProps<"/site/[mode]/[slug]/rooms/[roomSlug]">;
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug, roomSlug } = await params;
-  const site = await getSiteTenant(slug);
-  if (!site) return {};
-  const room = (await getPublicRooms(site.tenant)).find((r) => r.slug === roomSlug.toLowerCase());
-  return room ? { title: room.name, description: room.description?.slice(0, 160) } : { title: "Room" };
+/** A placeholder, like the hostel one in ../../layout.tsx: never a real room, always a 404. */
+export function generateStaticParams() {
+  return [{ roomSlug: "_placeholder" }];
 }
 
-async function RoomDetail({ params, searchParams }: Props) {
-  const [{ slug, roomSlug }, query] = await Promise.all([params, searchParams]);
-  const site = await getSiteTenant(slug);
+// A fixed title: one that names the room would stop Next.js from storing this page (it would
+// need the room before the page shell). The hostel name is added by the layout's template.
+export const metadata: Metadata = { title: "Room details" };
+
+async function RoomDetail({ params }: Pick<Props, "params">) {
+  const { mode, slug, roomSlug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const name = await getTenantDisplayName(site.tenant);
   if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
@@ -88,7 +89,7 @@ async function RoomDetail({ params, searchParams }: Props) {
               {room.offers.map((offer) => (
                 <li
                   key={offer.periodId}
-                  className={cn("rounded-lg border bg-card p-4", offer.periodId === query.period ? "border-primary" : "border-border")}
+                  className="rounded-lg border border-border bg-card p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-sans text-base font-semibold">{offer.periodName}</h3>
@@ -138,10 +139,11 @@ function RoomSkeleton() {
   );
 }
 
+
 export default function RoomPage(props: Props) {
   return (
     <Suspense fallback={<RoomSkeleton />}>
-      <RoomDetail {...props} />
+      <RoomDetail params={props.params} />
     </Suspense>
   );
 }

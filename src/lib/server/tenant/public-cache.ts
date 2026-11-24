@@ -7,7 +7,9 @@ import { updateTag } from "next/cache";
  * clear them at once; anything else, such as a hold expiring, shows within about a minute.
  * The cache never decides a booking: prices, deposits and capacity are re-read in the database.
  */
-export const PUBLIC_CACHE_LIFE = { stale: 30, revalidate: 60, expire: 300 };
+// Next.js leaves caches out of stored pages when `stale` is under 5 minutes or `expire` under
+// 5 minutes (cacheLife docs, "Prerendering behavior"). `revalidate` is what bounds freshness.
+export const PUBLIC_CACHE_LIFE = { stale: 300, revalidate: 60, expire: 3600 };
 export const publicSiteTag = (tenantId: string) => `public-site:${tenantId}`;
 
 /** Browser tests reset their data between tests, so they turn the cache off. */

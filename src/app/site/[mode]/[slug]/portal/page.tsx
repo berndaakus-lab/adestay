@@ -11,7 +11,7 @@ import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
 export const metadata: Metadata = { title: "Student portal" };
 
 // Placeholder until the student portal is built (Phase 4).
-async function Portal({ params }: { params: PageProps<"/sites/[slug]/portal">["params"] }) {
+async function Portal({ params }: { params: PageProps<"/site/[mode]/[slug]/portal">["params"] }) {
   const site = await getSiteTenant((await params).slug);
   if (!site) notFound();
   const user = await requireStudentSession(sitePath(site, "/portal"), sitePath(site, "/portal/sign-in"));
@@ -32,7 +32,7 @@ async function Portal({ params }: { params: PageProps<"/sites/[slug]/portal">["p
   );
 }
 
-export default function PortalPage({ params }: PageProps<"/sites/[slug]/portal">) {
+export default function PortalPage({ params }: PageProps<"/site/[mode]/[slug]/portal">) {
   return (
     <AuthCard eyebrow="Student portal" title="Welcome" inSite>
       <Suspense fallback={<FormSkeleton />}>

@@ -4,8 +4,10 @@
 // Uses the production build against the local fake API with made-up content. A proxy adds delay to
 // every uncached database call, because a local API would otherwise answer unrealistically fast.
 // The image optimizer refuses local addresses, so photos are stored at the 750 px width it would
-// serve to this phone. This is a lab result: it does not measure Vercel, hosted Supabase, the real
-// image optimizer or a real phone network.
+// serve to this phone. In production photos come from the app's own domain (/_next/image, cached
+// at the edge), so a front server puts pages, photos and the fake API on one origin. Photos skip
+// the database delay; PERF_PHOTO_DELAY=1 delays them too (stricter). This is a lab result: it does
+// not measure Vercel, hosted Supabase, the real image optimizer or a real phone network.
 import { execFileSync, spawn } from "node:child_process";
 import http from "node:http";
 import path from "node:path";
@@ -18,10 +20,14 @@ const APP_PORT = 3200;
 const FAKE_PORT = 54397;
 const PROXY_PORT = 54396;
 const CHROME_PORT = 9334;
+const FRONT_PORT = 3201;
+const API_PATH = /^\/(rest|auth)\/v1\//;
+const PHOTO_PATH = /^\/storage\/v1\//;
+const PHOTO_DELAY = process.env.PERF_PHOTO_DELAY === "1";
 const API_DELAY_MS = Number(process.env.PERF_API_DELAY_MS ?? 150);
 // "simulate" (Lighthouse's default) estimates the slow network; "devtools" actually applies it.
 const THROTTLING = process.env.PERF_THROTTLING === "devtools" ? "devtools" : "simulate";
-const RUNS = 3;
+const RUNS = 5;
 const MAX_LCP_MS = 2500;
 const MIN_SCORE = 85;
 
@@ -97,8 +103,21 @@ async function seed() {
   for (const [name, body] of Object.entries(files)) {
     await fetch(`${fake}/storage/v1/object/tenant-public/${name}`, { method: "POST", body });
   }
-  console.log(`Photos: hero ${Math.round(hero.length / 1024)} KB, room ${Math.round(room.length / 1024)} KB. Database delay: ${API_DELAY_MS} ms per call.`);
+  console.log(`Photos: hero ${Math.round(hero.length / 1024)} KB, room ${Math.round(room.length / 1024)} KB. Database delay: ${API_DELAY_MS} ms per call${PHOTO_DELAY ? ", photos too" : ""}.`);
 }
+
+// Database and auth calls go through the delay proxy, photos to the fake store, the rest to the app.
+const front = http.createServer((req, res) => {
+  const url = req.url ?? "";
+  const photoPort = PHOTO_DELAY ? PROXY_PORT : FAKE_PORT;
+  const port = PHOTO_PATH.test(url) ? photoPort : API_PATH.test(url) ? PROXY_PORT : APP_PORT;
+  const upstream = http.request({ host: "127.0.0.1", port, path: req.url, method: req.method, headers: req.headers }, (answer) => {
+    res.writeHead(answer.statusCode ?? 502, answer.headers);
+    answer.pipe(res);
+  });
+  upstream.on("error", () => res.destroy());
+  req.pipe(upstream);
+});
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 
@@ -108,24 +127,29 @@ try {
   start(["tests/e2e-admin/fake-supabase.mjs"], { FAKE_SUPABASE_PORT: String(FAKE_PORT) });
   await waitFor(`http://127.0.0.1:${FAKE_PORT}/__health`);
   await new Promise((resolve) => proxy.listen(PROXY_PORT, "127.0.0.1", resolve));
+  await new Promise((resolve) => front.listen(FRONT_PORT, "127.0.0.1", resolve));
   start([path.join("node_modules", "next", "dist", "bin", "next"), "start", "-p", String(APP_PORT)], {
-    NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${PROXY_PORT}`,
+    NEXT_PUBLIC_SUPABASE_URL: `http://localhost:${FRONT_PORT}`,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "fake-anon-key-for-local-perf-only",
     SUPABASE_SERVICE_ROLE_KEY: "fake-service-role-for-local-perf-only",
     LOG_REDACTION_SALT: "fake-lookup-secret-for-local-perf-only",
   });
   await waitFor(`http://localhost:${APP_PORT}`);
+  await waitFor(`http://localhost:${FRONT_PORT}`);
   await seed();
   browser = await chromium.launch({ headless: true, args: [`--remote-debugging-port=${CHROME_PORT}`] });
 
   console.log(`\nPage                 LCP (ms)   Score   Runs: ${RUNS}, slow 4G (${THROTTLING}), mobile`);
   for (const [name, pagePath] of PAGES) {
-    // One warm-up request, so a cold server start is not counted against the first page.
-    await fetch(`http://localhost:${APP_PORT}${pagePath}`).then((r) => r.text());
+    // Warm-up: the first visit to a page fills the cache, as it would for any earlier visitor.
+    for (let i = 0; i < 2; i++) {
+      await fetch(`http://localhost:${FRONT_PORT}${pagePath}`).then((r) => r.text());
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
     const lcps = [];
     const scores = [];
     for (let run = 0; run < RUNS; run++) {
-      const result = await lighthouse(`http://localhost:${APP_PORT}${pagePath}`, { port: CHROME_PORT, output: "json", logLevel: "error", onlyCategories: ["performance"], throttlingMethod: THROTTLING });
+      const result = await lighthouse(`http://localhost:${FRONT_PORT}${pagePath}`, { port: CHROME_PORT, output: "json", logLevel: "error", onlyCategories: ["performance"], throttlingMethod: THROTTLING });
       const lcp = result?.lhr.audits["largest-contentful-paint"].numericValue;
       const score = result?.lhr.categories.performance.score;
       if (lcp == null || score == null) throw new Error(`Lighthouse returned no result for ${pagePath}: ${result?.lhr.runtimeError?.code ?? "unknown"}`);
@@ -141,6 +165,7 @@ try {
 } finally {
   await browser?.close().catch(() => {});
   proxy.close();
+  front.close();
   children.forEach(stop);
 }
 console.log(failed ? `\nFailed: needs LCP under ${MAX_LCP_MS} ms and a score of at least ${MIN_SCORE}.` : "\nAll pages passed.");

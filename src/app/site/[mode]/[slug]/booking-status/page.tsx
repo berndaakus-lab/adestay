@@ -4,14 +4,14 @@ import { Suspense } from "react";
 import { BookingLookupForm } from "@/components/site/booking-lookup-form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
 
 export const metadata: Metadata = { title: "Check booking status", robots: { index: false } };
 
 // Stays available while a hostel is suspended, so students can still check a booking (D-16).
-async function BookingStatus({ params }: { params: PageProps<"/sites/[slug]/booking-status">["params"] }) {
-  const { slug } = await params;
-  const site = await getSiteTenant(slug);
+async function BookingStatus({ params }: { params: PageProps<"/site/[mode]/[slug]/booking-status">["params"] }) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
   if (!site) notFound();
   const name = await getTenantDisplayName(site.tenant);
   return (
@@ -26,7 +26,7 @@ async function BookingStatus({ params }: { params: PageProps<"/sites/[slug]/book
   );
 }
 
-export default function BookingStatusPage({ params }: PageProps<"/sites/[slug]/booking-status">) {
+export default function BookingStatusPage({ params }: PageProps<"/site/[mode]/[slug]/booking-status">) {
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-12">
       <Suspense fallback={<Skeleton className="h-96 w-full" />}>

@@ -14,8 +14,8 @@ Each hostel needs its own branded site on a subdomain or custom domain. Staff ma
 2. **Resolution:**
    1. Middleware normalises the Host (lowercase, strip port) and **removes any inbound `x-tenant-*` headers**.
    2. It looks the host up via `app.resolve_tenant_by_host()`, which returns only verified domains of non-archived tenants, cached about 60 s.
-   3. It sets an internal header.
-   4. Server code re-resolves through a request-scoped cached function, so it never trusts the header alone for anything private.
+   3. It sets an internal header. For public hostel pages it also rewrites to an internal path, `/site/{live|preview}/{slug}/…` (Phase 3, task 18), so each hostel's public pages can be stored and served as finished pages. The proxy refuses any request that asks for `/site/…` directly, so that path can only come from a rewrite.
+   4. Server code re-resolves through a request-scoped cached function, so it never trusts the header alone for anything private. Public pages trust the internal path only to choose which **published** content to show (`getPublicSite`, which still refuses onboarding hostels, malformed slugs and previews outside staging). The student portal and every private read keep the header check (`getSiteTenant`).
 3. **Tenant context ≠ authorization:** the host only selects which public content to show. Private data requires membership/ownership through RLS.
 4. **Student auth on tenant domains** uses OTP codes typed into the page, so no per-domain redirect URL is needed. Password-reset links for staff point only at `app.` (a single redirect allow-list entry).
 5. **Suspended tenants:** the host resolves, but public pages render "temporarily unavailable" and authenticated staff access is denied by RLS helpers.

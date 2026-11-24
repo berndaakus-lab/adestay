@@ -8,32 +8,28 @@ import { periodDates, RoomCard } from "@/components/site/room-card";
 import { SuspendedNotice } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { bookablePeriods, getPublicRooms } from "@/lib/server/tenant/public-content";
+import { firstParam } from "@/lib/search-params";
+import { bookablePeriods, getPublicRooms, type PublicRoomType, type RoomOffer } from "@/lib/server/tenant/public-content";
 import { getTenantDisplayName } from "@/lib/server/tenant/profile";
-import { getSiteTenant, sitePath } from "@/lib/server/tenant/site";
+import { getPublicSite } from "@/lib/server/tenant/public-site";
+import { sitePath, type SiteTenant } from "@/lib/server/tenant/site";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Rooms" };
 
-async function RoomsList({ params, searchParams }: PageProps<"/sites/[slug]/rooms">) {
-  const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const site = await getSiteTenant(slug);
-  if (!site) notFound();
-  const name = await getTenantDisplayName(site.tenant);
-  if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
+type Props = PageProps<"/site/[mode]/[slug]/rooms">;
 
-  const rooms = await getPublicRooms(site.tenant);
-  const periods = bookablePeriods(rooms);
-  const selected = periods.find((p) => p.periodId === query.period) ?? periods[0];
+interface Listing {
+  site: SiteTenant;
+  name: string;
+  rooms: PublicRoomType[];
+  periods: RoomOffer[];
+}
+
+function RoomsForPeriod({ site, name, rooms, periods, selected }: Listing & { selected: RoomOffer | undefined }) {
   const shown = selected ? rooms.filter((r) => r.offers.some((o) => o.periodId === selected.periodId)) : rooms;
-  const roomHref = (roomSlug: string) =>
-    sitePath(site, `/rooms/${roomSlug}${selected ? `?period=${selected.periodId}` : ""}`);
-
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-12 md:px-10 md:py-16">
-      <p className="eyebrow mb-3">{name}</p>
-      <h1 className="text-4xl md:text-5xl">Rooms and prices</h1>
-
+    <>
       {periods.length > 1 ? (
         <nav aria-label="Booking period" className="mt-8 flex flex-wrap gap-2">
           {periods.map((period) => {
@@ -67,7 +63,7 @@ async function RoomsList({ params, searchParams }: PageProps<"/sites/[slug]/room
               key={room.id}
               room={room}
               offer={room.offers.find((o) => o.periodId === selected?.periodId)}
-              href={roomHref(room.slug)}
+              href={sitePath(site, `/rooms/${room.slug}`)}
               priority={index === 0}
             />
           ))}
@@ -86,6 +82,33 @@ async function RoomsList({ params, searchParams }: PageProps<"/sites/[slug]/room
           />
         </div>
       )}
+    </>
+  );
+}
+
+/** Only this part reads the query string, so the default listing can be stored as a finished page. */
+async function RoomsForQuery({ searchParams, ...listing }: Listing & { searchParams: Props["searchParams"] }) {
+  const requested = firstParam((await searchParams).period);
+  return <RoomsForPeriod {...listing} selected={listing.periods.find((p) => p.periodId === requested) ?? listing.periods[0]} />;
+}
+
+async function RoomsList({ params, searchParams }: Props) {
+  const { mode, slug } = await params;
+  const site = await getPublicSite(mode, slug);
+  if (!site) notFound();
+  const name = await getTenantDisplayName(site.tenant);
+  if (site.tenant.status === "suspended") return <SuspendedNotice name={name} portalHref={sitePath(site, "/portal")} />;
+
+  const rooms = await getPublicRooms(site.tenant);
+  const listing: Listing = { site, name, rooms, periods: bookablePeriods(rooms) };
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-4 py-12 md:px-10 md:py-16">
+      <p className="eyebrow mb-3">{name}</p>
+      <h1 className="text-4xl md:text-5xl">Rooms and prices</h1>
+      <Suspense fallback={<RoomsForPeriod {...listing} selected={listing.periods[0]} />}>
+        <RoomsForQuery {...listing} searchParams={searchParams} />
+      </Suspense>
     </div>
   );
 }
@@ -100,7 +123,7 @@ function RoomsSkeleton() {
   );
 }
 
-export default function RoomsPage(props: PageProps<"/sites/[slug]/rooms">) {
+export default function RoomsPage(props: Props) {
   return (
     <Suspense fallback={<RoomsSkeleton />}>
       <RoomsList {...props} />

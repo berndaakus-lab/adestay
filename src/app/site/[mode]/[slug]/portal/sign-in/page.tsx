@@ -15,8 +15,8 @@ async function StudentSignIn({
   params,
   searchParams,
 }: {
-  params: PageProps<"/sites/[slug]/portal/sign-in">["params"];
-  searchParams: PageProps<"/sites/[slug]/portal/sign-in">["searchParams"];
+  params: PageProps<"/site/[mode]/[slug]/portal/sign-in">["params"];
+  searchParams: PageProps<"/site/[mode]/[slug]/portal/sign-in">["searchParams"];
 }) {
   const site = await getSiteTenant((await params).slug);
   if (!site) notFound();
@@ -31,7 +31,7 @@ async function StudentSignIn({
   );
 }
 
-export default function StudentSignInPage({ params, searchParams }: PageProps<"/sites/[slug]/portal/sign-in">) {
+export default function StudentSignInPage({ params, searchParams }: PageProps<"/site/[mode]/[slug]/portal/sign-in">) {
   return (
     <AuthCard eyebrow="Student portal" title="Sign in" inSite>
       <Suspense fallback={<FormSkeleton />}>
